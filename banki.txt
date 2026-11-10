@@ -1,0 +1,7 @@
+# Lista banków dla Alicji MIDI — ten plik leży obok strony, w tym samym folderze co index.html (Alicja MIDI).
+# Jedna linijka = jeden bank:
+#   plik (ścieżka od strony albo adres w internecie) | nazwa | autor | strona autora | licencja
+# Bank w kawałkach (każdy poniżej 25 MB, żeby wszedł przez przeglądarkę na GitHub): kawałki po kolei, połączone znakiem +
+# Pierwszy bank na liście jest bankiem domyślnym (gra, gdy nie ma urządzenia MIDI).
+# Linijki zaczynające się od # są pomijane. Żeby dodać bank: połóż plik .sf2 / .sf3 w folderze „banki” i dopisz linijkę.
+banki/GeneralUser-GS.sf2.cz1 + banki/GeneralUser-GS.sf2.cz2 | GeneralUser GS 2.0.3 | S. Christian Collins | https://www.schristiancollins.com/generaluser.php | darmowy, wolno używać w programach — licencja: banki/GeneralUser-GS-LICENSE.txt
