@@ -2179,33 +2179,24 @@ addEventListener('dragover', e => e.preventDefault());
 addEventListener('drop', async e => { e.preventDefault(); for (const f of [...e.dataTransfer.files]) { if (/\.(sf2|sf3)$/i.test(f.name)) await wczytajBank(f); else if (/\.(mid|midi|kar)$/i.test(f.name)) await wczytajMidi(f); } });
 addEventListener('resize', rozmiarSmug);
 zbudujKlawiature(); rozmiarSmug(); rysujUrzadzenia(); rysujKanaly(); requestAnimationFrame(klatka);
-// START (jak vanBasco): najpierw urządzenie MIDI w systemie (np. VirtualMIDISynth) → gdy go nie ma: bank domyślny → gdy i jego nie ma: Alicja
-const naStartUrzadzenie = w => w.find(o => /VirtualMIDISynth/i.test(o.name)) || w[0];
+// START: zawsze bank domyślny (GeneralUser GS z banki.txt) → gdy go nie ma: Alicja.
+// Urządzenia MIDI w systemie (VirtualMIDISynth, klawiatura…) Alicja NIGDY sama nie wybiera — tylko gdy wybierzesz je na liście.
+// Gdy przeglądarka już wcześniej pozwoliła na MIDI, podłączam po cichu klawiaturę USB (żeby można było na niej grać) — bez zmiany wyjścia.
 let RECZNIE = false;                                     // użytkownik sam coś wybrał na liście — wtedy start już nic nie przełącza
 (async () => {
   status('⏳ Wczytuję zapamiętane banki…');
   await czytajListe();
   for (const z of (await wszystkieZPamieci()) || []) { try { dodajBank(z.dane, z.plik); } catch (e) {} }
   rysujUrzadzenia();
-  // szukanie urządzeń: za pierwszym razem przeglądarka zapyta o pozwolenie na MIDI. Czekam najwyżej 10 s, potem start idzie dalej,
-  // a gdy pozwolenie przyjdzie później — przełączam na urządzenie, o ile nic jeszcze nie gra i nic nie wybrano ręcznie.
-  let odmowa = false; try { odmowa = (await navigator.permissions.query({ name: 'midi' })).state === 'denied'; } catch (e) {}
-  if (navigator.requestMIDIAccess && !odmowa) {
-    status('🔍 Szukam urządzeń MIDI w systemie… (jeśli przeglądarka zapyta o MIDI — kliknij „Zezwól”)');
-    const szukanie = szukaj(true);
-    const w = await Promise.race([szukanie, new Promise(ok => setTimeout(() => ok(null), 10000))]);
-    if (w && w.length) { await wybierzBank('system', naStartUrzadzenie(w)); return gotowe(); }
-    if (w === null) szukanie.then(w2 => { const o = w2 && w2.length && naStartUrzadzenie(w2); if (o && !gra && !RECZNIE) wybierzBank('system', o).then(gotowe); });
-  }
+  try { if ((await navigator.permissions.query({ name: 'midi' })).state === 'granted') szukaj(true); } catch (e) {}
   if (!BANKI.some(B => B.domyslny)) await pobierzDomyslny();
   rysujUrzadzenia();
   if (RECZNIE) return;
-  let ost = null; try { ost = localStorage.getItem('alicjaSynthUrz'); } catch (e) {}
   const domyslny = BANKI.find(B => B.domyslny);
   await wybierzBank(domyslny || 'alicja');
   gotowe();
 })();
-function gotowe() { status(`Gra: <b>${esc(nazwaBanku(BANK))}</b> — wczytaj piosenkę MIDI. Urządzenie zmienisz na liście „Urządzenie wyjściowe”.`
+function gotowe() { status(`Gra: <b>${esc(nazwaBanku(BANK))}</b> — wczytaj piosenkę MIDI. Urządzenie zmienisz na liście „Urządzenie wyjściowe” (🔍 Szukaj pokaże urządzenia MIDI w systemie).`
   + (BRAK_DOMYSLNEGO ? `<br>Bank domyślny się nie pobrał (strona otwarta z dysku albo nie ma pliku <b>${BANK_DOMYSLNY}</b> obok strony). Wczytaj go raz przyciskiem „➕ Wczytaj bank” — zapamiętam go.` : '')); }
 
 /* =====================================================================
