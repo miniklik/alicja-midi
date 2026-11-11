@@ -225,6 +225,23 @@ input[type=range] { accent-color:var(--zloto); }
 #soloPomoc b { color:#fff; font-weight:600; background:#0d2f74aa; border-radius:3px; padding:0 4px; }
 #soloPomoc[hidden] { display:none; }
 #soloOkno { position:relative; }
+/* 🎛 EFEKTY kanału: gałki na grafitowym polu w miejscu nut */
+#soloEf { display:none; box-sizing:border-box; border:4px solid #0a0d12; border-radius:3px; box-shadow:0 0 0 2px #3c7df0; background:linear-gradient(#262a33,#1a1d23); padding:14px 18px; }
+#soloEf.wl { display:flex; flex-direction:column; }
+#soloEf .efGora { font-size:12px; color:#9fb4d8; margin-bottom:10px; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+#soloEf .efGora b { color:#e8f0ff; font-size:14px; }
+#soloEf .efGalki { flex:1; display:grid; grid-template-columns:repeat(8, minmax(0, 1fr)); gap:6px; align-content:center; }
+#soloEf .efG { display:flex; flex-direction:column; align-items:center; gap:4px; user-select:none; touch-action:none; cursor:ns-resize; padding:8px 2px; border-radius:8px; }
+#soloEf .efG:hover { background:rgba(255,255,255,.04); }
+#soloEf .efG svg { width:100%; max-width:80px; height:auto; aspect-ratio:1; }
+#soloEf .efG .nz { white-space:nowrap; font-size:13px; font-weight:700; color:#e8f0ff; }
+#soloEf .efG .cc { font-size:10px; color:#6f84a8; }
+#soloEf .efG .wa { font-size:15px; font-weight:700; color:var(--zloto); font-variant-numeric:tabular-nums; min-height:19px; }
+#soloEf .efG .op { font-size:10px; color:#8fa8cf; min-height:13px; text-align:center; }
+#soloEf .efG.brak .wa { color:#5f6a80; }
+#soloEf .efG.brak .op { color:#5f6a80; }
+#soloEf .efG.rozne .op { color:#ffb35a; }
+#soloEf .efDol { font-size:11px; color:#6f84a8; margin-top:8px; }
 .strz { position:absolute; right:8px; width:22px; height:18px; padding:0; font-size:10px; line-height:16px; opacity:.55; z-index:2; }
 .strz:hover { opacity:1; }
 .strz.sa { opacity:1; color:var(--zloto); border-color:var(--zloto); box-shadow:0 0 6px rgba(255,210,90,.5); }
@@ -309,6 +326,7 @@ input[type=range] { accent-color:var(--zloto); }
     <div class="tytul"><b id="soloTytul">Solo</b><i></i></div>
     <div id="soloPasek"><button id="soloSluchaj" title="Słuchaj solo: słychać tylko ten kanał (pozostałe przyciszone)">🎧 Solo</button>
       <button id="soloEdytuj" title="Włącz / wyłącz edycję klocków">✏️ Edytuj</button>
+      <button id="soloEfekty" title="Efekty tego kanału zapisane w piosence: pogłos, chorus, delay, panorama, jasność, rezonans, atak, wygasanie">🎛 Efekty</button>
       <span id="soloNarzedzia" hidden>
         <button id="soloNagraj" title="Nagrywaj z klawiatury USB na ten kanał — od złotej linii. Stop: drugi klik, ⏹ albo spacja">⏺ Nagraj</button>
         <button id="soloCofnij" disabled title="Cofnij (Ctrl+Z)">↶</button>
@@ -323,6 +341,8 @@ input[type=range] { accent-color:var(--zloto); }
 
     <div id="soloOkno">
     <canvas id="soloPlotno" title="Kliknij, żeby przewinąć piosenkę w to miejsce"></canvas>
+      <div id="soloEf"><div class="efGora"><b id="efTytul"></b><span id="efInfo"></span></div><div class="efGalki" id="efGalki"></div>
+        <div class="efDol">Przekręć gałkę (ciągnij w górę / w dół, kółko myszy) — słychać od razu · puść — zapis w całej piosence (Cofnij ↶ przywraca) · dwuklik — usuń z kanału</div></div>
       <button id="soloGora" class="strz" title="Wyżej (klik: 2 półtony, Shift + klik: oktawa)">▲</button>
       <button id="soloDol" class="strz" title="Niżej (klik: 2 półtony, Shift + klik: oktawa)">▼</button>
     </div>
@@ -2952,6 +2972,8 @@ const NAZWY_NUT = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', '
 function rysujSolo() {
   const R = document.querySelector('.ramka[data-ramka=solo]'); if (!R || R.classList.contains('zwinieta')) return;
   const cv = $('soloPlotno'), K = KANALY[SOLO_NR];
+  if (EFEKTY) { cv.style.display = 'none'; $('soloGora').hidden = $('soloDol').hidden = true; rysujEfekty(); return; }
+  $('soloGora').hidden = $('soloDol').hidden = false;
   if (!UTWOR || !K) { $('soloInfo').textContent = UTWOR ? 'Kliknij kanał w „Kanały w piosence”, żeby zobaczyć jego nuty.' : ''; cv.style.display = 'none'; return; }
   if (!SOLO_NUTY) { SOLO_NUTY = nutyKanalu(SOLO_NR); SOLO_OST = ''; }
   const N = SOLO_NUTY; cv.style.display = N.length || EDYCJA ? 'block' : 'none';
@@ -3358,7 +3380,101 @@ $('soloSila').onchange = () => { if (zaznaczone().length) { poEdycji(); SILA_MIG
 $('soloUsun').onclick = () => { const L = zaznaczone(); if (L.length) { migawka(); usunNuty(L); } };
 $('soloCofnij').onclick = cofnij;
 $('soloSiatka').onchange = () => { SIATKA = +$('soloSiatka').value; ZMIANY++; rysujSolo(); };
+
+/* =====================================================================
+   🎛 EFEKTY KANAŁU — gałki na polu nut. Wartości czytane z piosenki (CC), zmiana słychać od razu, puszczenie = zapis w całej piosence.
+   Gra je silnik banku (SpessaSynth) albo urządzenie MIDI w Windows; zapisują się w pliku .mid — zagra je każdy odtwarzacz GS/XG.
+   ===================================================================== */
+const EF = [   // [CC, nazwa, wartość, gdy kanał jej nie ma, opis braku, jak pokazać]
+  [91, 'Pogłos', 0, 'brak — sucho', 'zw'], [93, 'Chorus', 0, 'brak — sucho', 'zw'], [94, 'Delay', 0, 'brak — bez echa', 'zw'],
+  [10, 'Panorama', 64, 'brak — środek', 'pan'], [74, 'Jasność', 64, 'brak — jak w banku', 'pm'], [71, 'Rezonans', 64, 'brak — jak w banku', 'pm'],
+  [73, 'Atak', 64, 'brak — jak w banku', 'pm'], [72, 'Wygasanie', 64, 'brak — jak w banku', 'pm']];
+var EFEKTY = false, EF_OST = '', EF_CIAG = null;
+const ccKanalu = (ch, c) => UTWOR ? UTWOR.ev.filter(e => (e.st & 0xf0) === 0xb0 && (e.st & 15) === ch && e.a === c) : [];
+function stanCC(ch, c) {                                       // wartość w tej chwili piosenki, czy jest w piosence, ile różnych wartości
+  const E = ccKanalu(ch, c), t = UTWOR ? teraz() : 0;
+  if (!E.length) return { jest: false, ile: 0, rozne: 0 };
+  const e = E.filter(x => x.t <= t + 1e-6).pop() || E[0];
+  return { jest: true, v: e.b, ile: E.length, rozne: new Set(E.map(x => x.b)).size };
+}
+const pokazW = (v, typ) => typ === 'pan' ? (v === 64 ? 'środek' : v < 64 ? 'L ' + (64 - v) : 'P ' + (v - 64)) : typ === 'pm' ? (v === 64 ? '0' : (v > 64 ? '+' : '−') + Math.abs(v - 64)) : String(v);
+function lukEf(v, typ, brak) {                                 // gałka: łuk 270°, od lewej (albo od środka dla panoramy / ±)
+  const R = 34, C = 43, kat = u => (135 + u * 270) * Math.PI / 180, p = u => [C + R * Math.cos(kat(u)), C + R * Math.sin(kat(u))];
+  const luk = (a, b) => { const [x1, y1] = p(a), [x2, y2] = p(b); return `M${x1.toFixed(1)} ${y1.toFixed(1)} A${R} ${R} 0 ${(b - a) * 270 > 180 ? 1 : 0} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`; };
+  const u = v / 127, od = typ === 'zw' ? 0 : 0.5, [a, b] = u < od ? [u, od] : [od, u], [px, py] = p(u), kol = brak ? '#5f6a80' : '#7fb8ff';
+  return `<path d="${luk(0, 1)}" stroke="#0d1017" stroke-width="7" fill="none" stroke-linecap="round"/>`
+    + (b - a > 0.004 ? `<path d="${luk(a, b)}" stroke="${kol}" stroke-width="7" fill="none" stroke-linecap="round"/>` : '')
+    + `<circle cx="${C}" cy="${C}" r="24" fill="${brak ? '#2a2e38' : '#323844'}" stroke="#0a0c10" stroke-width="2"/>`
+    + `<line x1="${C}" y1="${C}" x2="${(C + (px - C) * 0.62).toFixed(1)}" y2="${(C + (py - C) * 0.62).toFixed(1)}" stroke="${brak ? '#7a8496' : '#ffd25a'}" stroke-width="3.5" stroke-linecap="round"/>`;
+}
+function zbudujGalki() {
+  $('efGalki').innerHTML = EF.map(([c, nz]) => `<div class="efG" data-c="${c}" title="${nz} (CC ${c}) — ciągnij w górę / w dół (Shift: dokładniej), kółko myszy, dwuklik: usuń z kanału"><svg viewBox="0 0 86 86"></svg><span class="nz">${nz}</span><span class="cc">CC ${c}</span><span class="wa"></span><span class="op"></span></div>`).join('');
+  $('efGalki').querySelectorAll('.efG').forEach(el => {
+    const c = +el.dataset.c;
+    el.onpointerdown = e => { if (!UTWOR || SOLO_NR < 0) return; e.preventDefault(); el.setPointerCapture(e.pointerId);
+      const s = stanCC(SOLO_NR, c), d = EF.find(x => x[0] === c); EF_CIAG = { c, y0: e.clientY, v0: s.jest ? s.v : d[2], v: s.jest ? s.v : d[2], ruszona: false }; };
+    el.onpointermove = e => { if (!EF_CIAG || EF_CIAG.c !== c) return;
+      const v = Math.max(0, Math.min(127, Math.round(EF_CIAG.v0 + (EF_CIAG.y0 - e.clientY) / (e.shiftKey ? 4 : 1.2))));
+      if (v !== EF_CIAG.v) { EF_CIAG.v = v; EF_CIAG.ruszona = true; midi(0xb0 | SOLO_NR, c, v); rysujGalke(el, c, v, false); } };
+    el.onpointerup = el.onpointercancel = () => { if (!EF_CIAG || EF_CIAG.c !== c) return; const { v, ruszona } = EF_CIAG; EF_CIAG = null; if (ruszona) zapiszEf(c, v); else EF_OST = ''; };
+    el.onwheel = e => { if (!UTWOR || SOLO_NR < 0) return; e.preventDefault();
+      const s = stanCC(SOLO_NR, c), d = EF.find(x => x[0] === c), st = EF_KOLKO && EF_KOLKO.c === c ? EF_KOLKO.v : s.jest ? s.v : d[2];
+      const v = Math.max(0, Math.min(127, st + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 1 : 4)));
+      midi(0xb0 | SOLO_NR, c, v); rysujGalke(el, c, v, false);
+      clearTimeout(EF_KOLKO && EF_KOLKO.tm); EF_KOLKO = { c, v, tm: setTimeout(() => { EF_KOLKO = null; zapiszEf(c, v); }, 450) }; };
+    el.ondblclick = () => usunEf(c);
+  });
+}
+var EF_KOLKO = null;
+function rysujGalke(el, c, v, brak, s) {
+  const d = EF.find(x => x[0] === c);
+  el.querySelector('svg').innerHTML = lukEf(v, d[4], brak);
+  el.querySelector('.wa').textContent = brak ? '—' : pokazW(v, d[4]);
+  el.classList.toggle('brak', brak);
+  if (s) { el.classList.toggle('rozne', s.rozne > 1);
+    el.querySelector('.op').textContent = !s.jest ? d[3] : s.rozne > 1 ? `zmienia się w piosence (${s.ile}×)` : 'w piosence'; }
+}
+function rysujEfekty() {
+  if (!$('efGalki').children.length) zbudujGalki();
+  const K = KANALY[SOLO_NR], cv = $('soloPlotno');
+  const wys = parseInt(cv.style.height) || 380; $('soloEf').style.height = wys + 'px';
+  if (EF_CIAG || EF_KOLKO) return;                                // w trakcie kręcenia nie przerysowuję
+  const t = UTWOR ? teraz() : 0, klucz = SOLO_NR + ':' + ZMIANY + ':' + (UTWOR ? UTWOR.nazwa : '') + ':' + Math.floor(t * 4);
+  if (klucz === EF_OST) return; EF_OST = klucz;
+  if (!UTWOR || !K) { $('efTytul').textContent = 'Efekty'; $('efInfo').textContent = UTWOR ? 'Kliknij kanał w „Kanały w piosence”.' : 'Wczytaj piosenkę MIDI.';
+    $('efGalki').querySelectorAll('.efG').forEach(el => rysujGalke(el, +el.dataset.c, EF.find(x => x[0] === +el.dataset.c)[2], true, { jest: false, rozne: 0 })); return; }
+  $('efTytul').textContent = `Kanał ${K.nr + 1}: ${nazwaKanalu(K)}`;
+  let ile = 0;
+  $('efGalki').querySelectorAll('.efG').forEach(el => { const c = +el.dataset.c, s = stanCC(SOLO_NR, c), d = EF.find(x => x[0] === c);
+    if (s.jest) ile++; rysujGalke(el, c, s.jest ? s.v : d[2], !s.jest, s); });
+  $('efInfo').textContent = ile ? `— ${ile} z 8 efektów ustawionych w piosence` : '— ten kanał nie ma w piosence żadnego z tych efektów (gra na sucho)';
+}
+function zapiszEf(c, v) {
+  const U = UTWOR, ch = SOLO_NR; if (!U || ch < 0) return;
+  const s = stanCC(ch, c), d = EF.find(x => x[0] === c);
+  if (s.rozne > 1 && !confirm(`Kanał ${ch + 1}: ${d[1]} zmienia się w trakcie piosenki (${s.ile} zmian).\nUstawić wszędzie ${pokazW(v, d[4])}?`)) {
+    midi(0xb0 | ch, c, s.v); EF_OST = ''; rysujEfekty(); return; }
+  migawka();
+  if (s.jest) ccKanalu(ch, c).forEach(e => e.b = v); else U.ev.push({ tick: 0, seq: nowySeq(), st: 0xb0 | ch, a: c, b: v, tr: sciezkaKanalu(ch) });
+  const gralo = gra; poEdycji(); if (gralo) skocz(teraz()); else { midi(0xb0 | ch, c, v); zastosujDo(pozycja); }
+  EF_OST = ''; status(`🎛 Kanał ${ch + 1}: <b>${d[1]} ${pokazW(v, d[4])}</b> (CC ${c} = ${v}) — w całej piosence. Cofnij ↶ przywraca poprzednie.`);
+}
+function usunEf(c) {
+  const U = UTWOR, ch = SOLO_NR; if (!U || ch < 0) return;
+  const d = EF.find(x => x[0] === c); if (!ccKanalu(ch, c).length) return;
+  migawka(); U.ev = U.ev.filter(e => !((e.st & 0xf0) === 0xb0 && (e.st & 15) === ch && e.a === c));
+  const gralo = gra; poEdycji(); if (gralo) skocz(teraz()); else zastosujDo(pozycja);
+  midi(0xb0 | ch, c, d[2]);                                         // silnik wraca do wartości „brak”
+  EF_OST = ''; status(`🎛 Kanał ${ch + 1}: <b>${d[1]}</b> usunięty z piosenki (${d[3]}). Cofnij ↶ przywraca.`);
+}
+function ustawEfektyWidok(on) {
+  EFEKTY = on; $('soloEfekty').classList.toggle('wl', on); $('soloEf').classList.toggle('wl', on);
+  if (on) { $('soloEf').style.height = (parseInt($('soloPlotno').style.height) || 380) + 'px'; }
+  EF_OST = ''; SOLO_OST = ''; ZMIANY++; rysujSolo();
+}
+$('soloEfekty').onclick = () => { if (!EFEKTY && EDYCJA) $('soloEdytuj').onclick(); ustawEfektyWidok(!EFEKTY); };
 $('soloEdytuj').onclick = () => {
+  if (!EDYCJA && EFEKTY) ustawEfektyWidok(false);
   EDYCJA = !EDYCJA; ZAKRES = null; if (!EDYCJA) { WYBRANA = null; ZAZN.clear(); }   // piosenka gra dalej — Edytuj tylko rozwija narzędzia
   $('soloEdytuj').classList.toggle('wl', EDYCJA); $('soloNarzedzia').hidden = !EDYCJA; 
   $('soloPomoc').hidden = !EDYCJA; $('soloPlotno').style.cursor = EDYCJA ? 'crosshair' : 'pointer'; pokazSile(); ZMIANY++; rysujSolo();
