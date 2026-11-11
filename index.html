@@ -1642,7 +1642,7 @@ function sfGraj(B, P, n, v, K) {
 let BANK = 'alicja';
 let MIDI_DOSTEP = null, WYJ = null;
 const krotko = p => String(p).split('+')[0].trim().replace(/^.*\//, '').replace(/\.cz\d+$/i, '');      // z adresu albo ścieżki zostaje sama nazwa pliku (bank w kawałkach: nazwa bez .cz1)
-const nazwaBanku = B => B === 'system' ? (WYJ ? WYJ.name : 'urządzenie MIDI') : B === 'alicja' ? 'Alicja (dźwięki Alicji)' : B.waf ? '🌐 ' + B.nazwa : (B.domyslny ? 'Bank domyślny: ' : '') + B.nazwa + ' · plik ' + krotko(B.plik);
+const nazwaBanku = B => B === 'system' ? (WYJ ? WYJ.name : 'urządzenie MIDI') : B === 'alicja' ? 'brak banku' : B.waf ? '🌐 ' + B.nazwa : (B.domyslny ? 'Bank domyślny: ' : '') + B.nazwa + ' · plik ' + krotko(B.plik);
 
 // szukanie urządzeń: przeglądarka podaje listę wyjść MIDI zainstalowanych w systemie — tę samą, którą widzi vanBasco
 async function dostepMidi() {
@@ -1689,19 +1689,30 @@ function spessa() {
     // lampki kanałów i klawiatura przy graniu z banku: silnik sam mówi, co gra (także gdy piosenkę prowadzi jego własny odtwarzacz)
     s.eventHandler.addEvent('noteOn', 'alicja', e => { const K = KANALY[e.channel]; if (!K) return; K.akt = 1; K.licz++; zapal(e.midiNote, 1, K); });
     s.eventHandler.addEvent('noteOff', 'alicja', e => { const K = KANALY[e.channel]; if (!K) return; K.licz = Math.max(0, K.licz - 1); zapal(e.midiNote, -1, K); });
-    s.eventHandler.addEvent('programChange', 'alicja', e => { const K = KANALY[e.channel]; if (!K || !(BANK && BANK.SF) || !(gra && TRYB === 'seq')) return; /* tylko gdy piosenkę prowadzi silnik — nasze własne zmiany już znamy */ K.prog = e.program; if (e.bankMSB !== undefined) K.bankMSB = e.bankMSB; rozwiaz(K); rysujKanal(K); });
+    s.eventHandler.addEvent('programChange', 'alicja', e => { const K = KANALY[e.channel]; if (!K || !(BANK && BANK.SF) || !(gra && TRYB === 'seq')) return; /* tylko gdy piosenkę prowadzi silnik — nasze własne zmiany już znamy */
+      // silnik podaje numer barwy, którą WZIĄŁ (przy braku w banku — zastępczą), a nie tę, o którą prosi piosenka — dlatego numer biorę z piosenki
+      const st = stanWPiosence(e.channel, teraz() + 0.05); K.prog = st ? st.prog : e.program; if (st) K.bankMSB = st.msb; else if (e.bankMSB !== undefined) K.bankMSB = e.bankMSB;
+      rozwiaz(K); rysujKanal(K); });
     s.eventHandler.addEvent('stopAll', 'alicja', () => { KANALY.forEach(K => K.licz = 0); });
     const g = audio.createGain(); g.gain.value = SPESSA_POZIOM; s.connect(g); g.connect(suma);
     SPESSA = s; return s;
   })();
 }
+let SPESSA_INNE = [];                                  // banki, które zostały w silniku oprócz wybranego (ma być pusto)
 async function bankDoSpessy(B) {
   const s = await spessa();
   if (SPESSA_BANK === B.plik) return;
   status(`⏳ Ładuję bank <b>${esc(B.nazwa)}</b> do silnika…`);
-  if (SPESSA_BANK) { try { await s.soundBankManager.deleteSoundBank(SPESSA_BANK); } catch (e) {} }
-  await s.soundBankManager.addSoundBank(B.SF.dane.slice(0), B.plik);     // kopia — silnik zabiera dane do swojego wątku
-  await s.isReady; SPESSA_BANK = B.plik; ustawPoglosBanku(); ustawWysokosc(); KANALY.forEach(K => cicho(K) && ustawWyciszenie(K));
+  // JEDEN BANK, BEZ MIESZANIA: najpierw wkładam nowy, dopiero potem wyjmuję stare.
+  // (Silnik nie pozwala wyjąć ostatniego banku — dawniej stary zostawał w środku i miał pierwszeństwo, więc grał dalej GeneralUser.)
+  const M = s.soundBankManager;
+  await M.addSoundBank(B.SF.dane.slice(0), B.plik);                     // kopia — silnik zabiera dane do swojego wątku
+  await s.isReady;
+  for (const id of [...(M.priorityOrder || [])]) if (id !== B.plik) { try { await M.deleteSoundBank(id); } catch (e) {} }
+  await s.isReady; SPESSA_BANK = B.plik;
+  const zostalo = [...(M.priorityOrder || [])];
+  SPESSA_INNE = zostalo.filter(id => id !== B.plik);                   // powinno być puste — jeśli nie, pokażę to na czerwono
+  ustawPoglosBanku(); ustawWysokosc(); KANALY.forEach(K => cicho(K) && ustawWyciszenie(K));
 }
 
 async function wybierzBank(B, o) {
@@ -1712,12 +1723,12 @@ async function wybierzBank(B, o) {
   ciszaWszedzie();
   BANK = B; if (B === 'system') WYJ = o;
   rozwiazWszystkie(); if (zewn()) KANALY.forEach(wyslijStanKanalu);
-  if (B === 'alicja') drgPrzygotuj(ALICJA.get('pian:1').drg);      // pianino Alicji liczy się w tle, żeby klawiatura od razu grała
   rysujUrzadzenia(); rysujKanaly();
   if (UTWOR) await przygotujUtwor();
   try { localStorage.setItem('alicjaSynthUrz', B === 'system' ? 'w:' + WYJ.name : B === 'alicja' ? 'alicja' : B.waf ? 'o:' + B.zrodlo : 'b:' + B.plik); } catch (e) {}
   pokazPoglos();
-  status(`Gra: <b>${esc(nazwaBanku(B))}</b>`);
+  status(`Gra: <b>${esc(nazwaBanku(B))}</b>` + (B && B.SF ? ' — tylko ten bank' + (brakujace() ? ` · ${brakujace()}` : '') : '')
+    + (B && B.SF && SPESSA_INNE.length ? `<br><b style="color:#ff6b6b">✖ W silniku został też inny bank: ${esc(SPESSA_INNE.map(krotko).join(', '))} — odśwież stronę.</b>` : ''));
   if (graloPrzed && UTWOR) { resetKanalow(); zastosujDo(pozycja); grajUtwor(); }
 }
 // lista jak w vanBasco: najpierw urządzenia systemu, potem dźwięki w przeglądarce
@@ -1726,7 +1737,7 @@ function rysujUrzadzenia() {
   if (BANK === 'system' && WYJ && !w.some(o => o.id === WYJ.id)) { WYJ = null; BANK = 'alicja'; rozwiazWszystkie(); }   // urządzenie zniknęło
   let h = '<optgroup label="Urządzenia MIDI w systemie">' + (w.length ? w.map(o => `<option value="w:${esc(o.id)}">${esc(o.name)}</option>`).join('')
     : `<option value="szukaj">${MIDI_DOSTEP ? '— nie znaleziono —' : '🔍 kliknij „Szukaj”…'}</option>`) + '</optgroup>';
-  h += '<optgroup label="W przeglądarce"><option value="alicja">Alicja (dźwięki Alicji)</option>' + BANKI.map((B, i) => `<option value="b:${i}">${B.domyslny ? 'Bank domyślny: ' : ''}${esc(B.nazwa)} (${B.SF.presety.length} brzmień · plik ${esc(krotko(B.plik))})</option>`).join('') + '</optgroup>';
+  h += '<optgroup label="W przeglądarce">' + (BANK === 'alicja' ? '<option value="alicja">— brak banku: wczytaj bank —</option>' : '') + BANKI.map((B, i) => `<option value="b:${i}">${B.domyslny ? 'Bank domyślny: ' : ''}${esc(B.nazwa)} (${B.SF.presety.length} brzmień · plik ${esc(krotko(B.plik))})</option>`).join('') + '</optgroup>';
   const doPobrania = LISTA.map((L, i) => [L, i]).filter(([L]) => !BANKI.some(B => B.plik === L.plik));      // banki z listy banki.txt, jeszcze nie pobrane
   if (doPobrania.length) h += '<optgroup label="Banki z listy (banki.txt) — pobiorą się po wybraniu">' + doPobrania.map(([L, i]) => `<option value="l:${i}">📁 ${esc(L.nazwa)}</option>`).join('') + '</optgroup>';
   // (barwy online WebAudioFont wyłączone — brzmiały słabo; kod został, ale nie ma ich na liście)
@@ -1735,7 +1746,7 @@ function rysujUrzadzenia() {
   $('lcdBankN').textContent = nazwaBanku(BANK);
   $('bUsun').disabled = !(BANK && BANK.SF) || !!BANK.domyslny;
   $('opisUrz').textContent = BANK === 'system' ? 'gra urządzenie MIDI zainstalowane w Windows (jak w vanBasco) — dźwięk i pogłos robi samo urządzenie'
-    : BANK === 'alicja' ? 'grają dźwięki Alicji w przeglądarce (perkusji jeszcze nie ma)'
+    : BANK === 'alicja' ? 'nie ma wczytanego banku — wczytaj bank przyciskiem „➕ Wczytaj bank” albo wybierz urządzenie MIDI'
     : BANK.waf ? 'barwy online z WebAudioFont — pobiera się tylko to, czego używa piosenka; gra odtwarzacz Alicji (perkusja z FluidR3)' : 'gra wczytany bank — silnik SpessaSynth w przeglądarce (pełny standard SoundFont, jak VirtualMIDISynth) · Pogłos: środek suwaka = tak, jak w banku';
   $('pogEt').style.opacity = BANK === 'system' ? .45 : 1;
 }
@@ -1778,7 +1789,8 @@ async function wczytajBank(plik) {
   try { dane = await plik.arrayBuffer(); B = dodajBank(dane, plik.name); } catch (e) { status('✖ ' + esc(e.message)); return; }
   zapiszWPamieci(plik.name, dane);                            // zapamiętany — po odświeżeniu strony będzie od razu
   await wybierzBank(B);                                       // wczytany bank od razu gra
-  status('✔ Gra bank ' + opisBanku(B) + ' · zapamiętany');
+  status('✔ Gra bank ' + opisBanku(B) + ' · zapamiętany · gra tylko ten bank' + (brakujace() ? ' · ' + brakujace() : '')
+    + (SPESSA_INNE.length ? `<br><b style="color:#ff6b6b">✖ W silniku został też inny bank: ${esc(SPESSA_INNE.map(krotko).join(', '))} — odśwież stronę.</b>` : ''));
 }
 // bank domyślny z serwera (z postępem). Ze strony otwartej z dysku przeglądarka go nie pobierze — wtedy wystarczy wczytać go raz przyciskiem.
 let BRAK_DOMYSLNEGO = false;
@@ -1913,9 +1925,10 @@ function ustawKanal(K) {
 function rozwiaz(K) {
   const perk = K.nr === 9;
   if (BANK === 'system') K.zr = null;
-  else if (BANK === 'alicja') K.zr = perk ? null : { typ: 'alicja', id: GM_ALICJA[K.prog] };
+  else if (BANK === 'alicja') K.zr = null;                     // brak banku: cisza (dźwięki Alicji wróciły do porządkowania w „Sampler MIDI Not”)
   else if (BANK.waf) { K.zr = { typ: 'waf' }; if (!perk) wafWczytaj(wafKlucz(BANK, K, 0)); }
   else { const P = sfZnajdz(BANK, perk ? 128 : K.bankMSB, K.prog); K.zr = P ? { typ: 'sf', B: BANK, P } : null; }
+  wyciszSilnik(K);
   if (!audio) return;
   const id = K.zr && K.zr.typ === 'alicja' ? K.zr.id : null;
   if (id !== K.instId) {
@@ -1925,10 +1938,28 @@ function rozwiaz(K) {
   }
 }
 function rozwiazWszystkie() { KANALY.forEach(rozwiaz); }
+// CISZA: kanał, którego barwy nie ma w wybranym banku, milczy (silnik sam wziąłby zastępstwo — tego nie chcemy)
+const brakBarwy = K => !!(BANK && BANK.SF && !K.zr);
+// o jaką barwę prosi piosenka na kanale ch w chwili t (sekundy): ostatnia zmiana programu i banku (CC0) przed t
+function stanWPiosence(ch, t) {
+  if (!UTWOR) return null; let prog = null, msb = 0;
+  for (const e of UTWOR.ev) { if (e.t > t) break; if ((e.st & 15) !== ch) continue;
+    if ((e.st & 0xf0) === 0xc0) prog = e.a; else if ((e.st & 0xf0) === 0xb0 && e.a === 0) msb = e.b; }
+  return prog === null ? null : { prog, msb };
+}
+// zapis do WAV: kanał, którego żadna barwa z piosenki nie jest w banku, milczy
+function kanalBezBarw(ch) {
+  if (!UTWOR || !(BANK && BANK.SF)) return false; let msb = 0; const uz = [];
+  for (const e of UTWOR.ev) { if ((e.st & 15) !== ch) continue; if ((e.st & 0xf0) === 0xb0 && e.a === 0) msb = e.b; else if ((e.st & 0xf0) === 0xc0) uz.push([msb, e.a]); }
+  if (!uz.length) uz.push([0, 0]);
+  return uz.every(([m, pr]) => !sfZnajdz(BANK, ch === 9 ? 128 : m, pr));
+}
+function wyciszSilnik(K) { if (SPESSA && SPESSA.midiChannels && SPESSA.midiChannels[K.nr]) try { SPESSA.midiChannels[K.nr].setSystemParameter('isMuted', cicho(K) || brakBarwy(K)); } catch (e) {} }
+const brakujace = () => { if (!UTWOR) return ''; const b = KANALY.filter(K => K.uzyty && brakBarwy(K)); return b.length ? `cisza na ${b.length === 1 ? 'kanale' : 'kanałach'} ${b.map(K => K.nr + 1).join(', ')} (tej barwy nie ma w banku)` : ''; };
 // co gra kanał — do podpisu
 function nazwaKanalu(K) {
   if (BANK === 'system') return K.nr === 9 ? 'Perkusja' : GM[K.prog];
-  if (!K.zr) return K.nr === 9 ? (BANK === 'alicja' ? 'perkusja: brak w Alicji' : 'perkusja: brak w banku') : 'brak w banku';
+  if (!K.zr) return BANK === 'alicja' ? 'brak banku' : K.nr === 9 ? 'perkusja: brak w banku' : 'brak w banku';
   if (K.zr.typ === 'waf') return K.nr === 9 ? 'Perkusja (FluidR3)' : GM[K.prog];
   return K.zr.typ === 'sf' ? K.zr.P.nazwa : ALICJA.get(K.zr.id).nazwa;
 }
@@ -2107,7 +2138,7 @@ async function przygotujUtwor() {
     const typ = e.st & 0xf0, k = e.st & 15;
     if (typ === 0xc0) prog[k] = e.a; else if (typ === 0xb0 && e.a === 0) msb[k] = e.b;
     else if (typ === 0x90 && e.b > 0) {
-      if (BANK === 'alicja') { if (k === 9) continue; const A = ALICJA.get(GM_ALICJA[prog[k]]); if (A.drg) { if (!U.drg.has(A.drg)) U.drg.set(A.drg, new Set()); U.drg.get(A.drg).add(e.a); } }
+      if (BANK === 'alicja') continue;                       // brak banku: nic do przygotowania
       else { const P = sfZnajdz(BANK, k === 9 ? 128 : msb[k], prog[k]); if (P) presety.add(P); }
     }
   }
@@ -2128,6 +2159,7 @@ async function zaladujSeq() {
     // żeby przed ▶ (klawiatura, nagrywanie) grał tak samo jak w piosence
     KANALY.forEach(K => wyslijStanKanalu(K));
   }
+  KANALY.forEach(wyciszSilnik);
 }
 async function grajUtwor() {
   if (!UTWOR || gra) return;
@@ -2143,6 +2175,7 @@ async function grajUtwor() {
     if (SEQ_UTWOR !== UTWOR) status('⏳ Ładuję piosenkę do silnika…');
     await zaladujSeq();
     if (id !== GRA_ID || BANK !== bank) return;              // w międzyczasie stop albo zmiana urządzenia
+    KANALY.forEach(wyciszSilnik);
     SEQ.playbackRate = tempo(); SEQ.currentTime = pozycja; SEQ.play(); TRYB = 'seq'; startCzas = zegar(); startPoz = pozycja;   // czas na ekranie liczę sama (nie z biblioteki)
   } else {
     TRYB = 'nasz'; startCzas = zegar(); startPoz = pozycja;
@@ -2204,7 +2237,7 @@ function ustawWyciszenie(K) {
   if (cicho(K)) puscWszystko(K, true);
   if (cicho(K) && MIDI_DOSTEP && WYJ) { const z = ZNACZNIK; ZNACZNIK = undefined;            // urządzenie: wyłącz nuty kanału (teraz i po nutach wysłanych wcześniej)
     doWyj([0xb0 | K.nr, 123, 0]); ZNACZNIK = performance.now() + WYPRZEDZENIE * 1000 + 30; doWyj([0xb0 | K.nr, 123, 0]); ZNACZNIK = z; }
-  if (SPESSA && SPESSA.midiChannels[K.nr]) try { SPESSA.midiChannels[K.nr].setSystemParameter('isMuted', cicho(K)); } catch (e) {}   // bank: wycisza silnik
+  wyciszSilnik(K);                                                     // bank: wycisza silnik (też gdy barwy nie ma w banku)
 }
 // klik w napis ON: włącz / wyłącz głos; klik w resztę kafelka: pokaż ten kanał w części „Solo”
 KANALY.forEach(K => {
@@ -3009,7 +3042,7 @@ $('bZapisz').onclick = () => {
   $('zapTytul').value = t; $('zapNazwa').value = czystaNazwa(t) || UTWOR.nazwa; ZAP_RECZNIE = false;
   const wavMozna = !!(BANK && BANK.SF); $('zapWav').disabled = $('zapMp3').disabled = !wavMozna; if (!wavMozna) $('zapWav').checked = $('zapMp3').checked = false;
   $('zapMp3Opis').textContent = wavMozna ? '— ten sam dźwięk, 192 kb/s, ok. 1,4 MB na minutę' : '— tylko gdy gra bank';
-  $('zapWavOpis').textContent = wavMozna ? '— dźwięk jak płyta CD (bez słów); kanały wyłączone ON nie wchodzą' : '— tylko gdy gra bank (np. GeneralUser), nie urządzenie MIDI ani dźwięki Alicji';
+  $('zapWavOpis').textContent = wavMozna ? '— dźwięk jak płyta CD (bez słów); kanały wyłączone ON nie wchodzą' : '— tylko gdy gra bank (np. GeneralUser), nie urządzenie MIDI';
   $('zapPostep').innerHTML = ''; $('zapOk').disabled = false;
   $('zapOkno').hidden = false; $('zapTytul').focus(); $('zapTytul').select();
 };
@@ -3088,7 +3121,7 @@ async function renderujDzwiek(bin, nazwa, postep) {
   const v = POG.bank, g = v <= 50 ? v / 50 : 1 + (v - 50) / 25;                    // pogłos — tak jak ustawPoglosBanku()
   try { s.setSystemParameter('reverbGain', g); } catch (e) {}
   try { s.setSystemParameter('keyShift', WYSOKOSC); } catch (e) {}
-  KANALY.forEach(K => { if (cicho(K)) try { s.midiChannels[K.nr].setSystemParameter('isMuted', true); } catch (e) {} });
+  KANALY.forEach(K => { if (cicho(K) || kanalBezBarw(K.nr)) try { s.midiChannels[K.nr].setSystemParameter('isMuted', true); } catch (e) {} });   // barwy nie ma w banku = cisza, także w WAV
   // postęp: liczenie zatrzymuje się co 5% na chwilę, żeby pokazać, ile już jest
   for (let i = 1; i < 20; i++) { const t = dl * i / 20; off.suspend(Math.floor(t * sr / 128) * 128 / sr).then(() => { postep(i / 20); off.resume(); }); }
   postep(0);
@@ -3206,8 +3239,17 @@ function wypelnijBarwy() {
   const sel = $('soloBarwa'), ch = SOLO_NR; if (!sel) return;
   if (!UTWOR || ch < 0) { sel.innerHTML = ''; sel.disabled = true; $('soloBarwaInfo').textContent = ''; return; }
   const P = progiKanalu(ch), teraz_ = P.filter(e => e.t <= pozycja + 1e-6).pop() || P[0], akt = teraz_ ? teraz_.a : 0, rozne = new Set(P.map(e => e.a)).size;
-  if (ch === 9) { const L = ZESTAWY.some(z => z[0] === akt) ? ZESTAWY : [...ZESTAWY, [akt, 'zestaw ' + (akt + 1)]];
+  if (ch === 9 && BANK && BANK.SF) {                  // bank: tylko zestawy perkusji z tego banku (bank 128)
+    const P = BANK.SF.presety.filter(p => p.bank === 128).sort((a, b) => a.numer - b.numer), jest = P.some(p => p.numer === akt);
+    sel.innerHTML = (P.length ? `<optgroup label="Zestawy w banku ${esc(BANK.nazwa)}">` + P.map(p => `<option value="${p.numer}">${esc(p.nazwa)}</option>`).join('') + '</optgroup>' : '')
+      + (jest ? '' : `<optgroup label="Teraz w piosence"><option value="${akt}">zestaw ${akt + 1} — brak w banku (cisza)</option></optgroup>`); }
+  else if (ch === 9) { const L = ZESTAWY.some(z => z[0] === akt) ? ZESTAWY : [...ZESTAWY, [akt, 'zestaw ' + (akt + 1)]];
     sel.innerHTML = '<optgroup label="Zestawy perkusji">' + L.map(([n, t]) => `<option value="${n}">${t}</option>`).join('') + '</optgroup>'; }
+  else if (BANK && BANK.SF) {                         // bank: tylko barwy, które są w tym banku (bank 0), z nazwami z banku
+    const P = BANK.SF.presety.filter(p => p.bank === 0).sort((a, b) => a.numer - b.numer), jest = P.some(p => p.numer === akt);
+    sel.innerHTML = `<optgroup label="W banku ${esc(BANK.nazwa)} (${P.length})">` + P.map(p => `<option value="${p.numer}">${p.numer + 1}. ${esc(p.nazwa)}</option>`).join('') + '</optgroup>'
+      + (jest ? '' : `<optgroup label="Teraz w piosence"><option value="${akt}">${akt + 1}. ${esc(GM[akt])} — brak w banku (cisza)</option></optgroup>`);
+  }
   else sel.innerHTML = GRUPY_GM.map((g, gi) => `<optgroup label="${g}">` + GM.slice(gi * 8, gi * 8 + 8).map((n, j) => `<option value="${gi * 8 + j}">${gi * 8 + j + 1}. ${esc(n)}</option>`).join('') + '</optgroup>').join('');
   sel.value = akt; sel.disabled = false;
   $('soloBarwaInfo').textContent = rozne > 1 ? `kanał ma ${rozne} barwy — zmienię wszystkie` : '';
@@ -3317,7 +3359,7 @@ $('soloUsun').onclick = () => { const L = zaznaczone(); if (L.length) { migawka(
 $('soloCofnij').onclick = cofnij;
 $('soloSiatka').onchange = () => { SIATKA = +$('soloSiatka').value; ZMIANY++; rysujSolo(); };
 $('soloEdytuj').onclick = () => {
-  EDYCJA = !EDYCJA; ZAKRES = null; if (!EDYCJA) { WYBRANA = null; ZAZN.clear(); } if (EDYCJA && gra) pauza();
+  EDYCJA = !EDYCJA; ZAKRES = null; if (!EDYCJA) { WYBRANA = null; ZAZN.clear(); }   // piosenka gra dalej — Edytuj tylko rozwija narzędzia
   $('soloEdytuj').classList.toggle('wl', EDYCJA); $('soloNarzedzia').hidden = !EDYCJA; 
   $('soloPomoc').hidden = !EDYCJA; $('soloPlotno').style.cursor = EDYCJA ? 'crosshair' : 'pointer'; pokazSile(); ZMIANY++; rysujSolo();
 };
@@ -3402,7 +3444,7 @@ function pokazInfo() {
   const B = BANK; let h = '';
   if (B === 'system') h = `<h3>${esc(WYJ ? WYJ.name : 'Urządzenie MIDI')}</h3><p>Gra urządzenie MIDI zainstalowane w Windows — tak jak w vanBasco. Alicja wysyła mu tylko nuty; dźwięk, bank i pogłos robi samo urządzenie (np. VirtualMIDISynth gra bankiem ustawionym w swoim konfiguratorze).</p>
     <p>Syntezatora „Microsoft GS Wavetable Synth” przeglądarki nie pokazują stronom — celowo go blokują.</p>`;
-  else if (B === 'alicja') h = `<h3>Alicja — dźwięki Alicji</h3><p>Nasze własne silniki z Alicji 3 i Organów Alicji: pianino Chopin (też nastrojone i szkolne), Barwy Alicji, Most ALA, dzwony i głosy organów. Gdy piosenka prosi o instrument GM, gra najbliższy dźwięk Alicji z tej samej rodziny.</p><p>Perkusji jeszcze nie ma.</p>`;
+  else if (B === 'alicja') h = `<h3>Brak banku</h3><p>Nie ma wczytanego banku. Wczytaj bank (plik .sf2) przyciskiem „➕ Wczytaj bank” albo wybierz urządzenie MIDI na liście.</p>`;
   else if (B.waf) { const ile = [...WAF_INSTR.values()].filter(p => p.gotowy).length;
     h = `<h3>🌐 ${esc(B.nazwa)}</h3><p>Barwy pobierane z internetu, <b>tylko te, których używa piosenka</b> — bez pobierania całego banku. Teraz pobrane: ${ile} instrumentów.</p>
     <p>Źródło nagrań: ${link('https://github.com/surikov/webaudiofont', 'WebAudioFont')} (surikov) — z serwera ${link('https://surikov.github.io/webaudiofontdata/sound/', 'surikov.github.io')}. Alicja bierze z tych plików tylko dane brzmień; gra je własny odtwarzacz Alicji.</p>
