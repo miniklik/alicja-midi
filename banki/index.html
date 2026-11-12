@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banki SF2 — Alicja MIDI</title>
+<style>
+  :root { --zloto:#ffd25a; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; font-family:"Segoe UI", system-ui, sans-serif; color:#e8f0ff;
+    background:radial-gradient(1200px 600px at 50% -10%, #2b2f38, #14161b 70%); display:flex; justify-content:center; padding:28px 14px; }
+  .plyta { align-self:flex-start; width:100%; max-width:820px; background:linear-gradient(#2a6be0,#1f58c4); border-radius:14px; padding:22px 22px 26px;
+    box-shadow:0 10px 40px #000a, inset 0 1px 0 #ffffff40; }
+  h1 { margin:0; text-align:center; letter-spacing:6px; font-size:30px; font-weight:800; color:#e9f1ff; text-shadow:0 2px 0 #0b2a66; }
+  h1 b { color:var(--zloto); }
+  .pod { text-align:center; font-size:11px; letter-spacing:4px; color:#bcd3fb; margin:4px 0 18px; }
+  .gora { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .duzy { display:inline-flex; align-items:center; gap:8px; padding:9px 14px; font-size:13px; font-weight:700; text-decoration:none; cursor:pointer;
+    color:#eaf2ff; background:linear-gradient(#1a52bd,#133f96 55%,#103580); border:1px solid #0a2763; border-radius:8px;
+    box-shadow:0 3px 6px #00000055, inset 0 1px 0 #ffffff30, inset 0 -2px 0 #00000030; transition:border-color .15s, filter .15s; }
+  .duzy:hover:not(:disabled) { border-color:var(--zloto); filter:brightness(1.12); color:#fff; }
+  .duzy:active:not(:disabled) { transform:translateY(1px); }
+  .duzy:disabled { opacity:.5; cursor:default; }
+  .info { font-size:12px; color:#cfe0ff; }
+  .lista { display:flex; flex-direction:column; gap:12px; }
+  .bank { background:#0f1a2e; border:1px solid #0a2763; border-radius:10px; padding:14px 16px; display:grid; grid-template-columns:1fr auto; gap:6px 16px; align-items:center;
+    box-shadow:inset 0 1px 0 #ffffff12; }
+  .bank h2 { margin:0; font-size:17px; color:#fff; }
+  .bank .opis { font-size:12px; color:#9fb4d8; line-height:1.5; }
+  .bank .opis a { color:#9fd0ff; }
+  .bank .opis b { color:#cfe0ff; font-weight:600; }
+  .bank .prawa { grid-row:1 / span 2; grid-column:2; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .bank .roz { font-size:12px; color:#a9c6f5; font-variant-numeric:tabular-nums; }
+  .pasek { width:170px; height:8px; border-radius:4px; background:#0a1220; border:1px solid #2b4a7f; overflow:hidden; display:none; }
+  .pasek i { display:block; height:100%; width:0; background:linear-gradient(90deg,#2c72e6,#7fb8ff); }
+  .stan { font-size:11px; color:#9ee07f; min-height:14px; text-align:right; }
+  .stan.zle { color:#ff8a8a; }
+  .pusto { text-align:center; padding:30px; color:#cfe0ff; background:#0f1a2e; border-radius:10px; }
+  .dol { margin-top:16px; font-size:11px; color:#bcd3fb; text-align:center; line-height:1.6; }
+  @media (max-width: 560px) { .bank { grid-template-columns:1fr; } .bank .prawa { grid-row:auto; grid-column:1; align-items:flex-start; } .stan { text-align:left; } }
+</style>
+</head>
+<body>
+<div class="plyta">
+  <h1>BANKI <b>SF2</b></h1>
+  <div class="pod">ALICJA MIDI · DO POBRANIA</div>
+  <div class="gora">
+    <a class="duzy" href="../">← Alicja MIDI</a>
+    <span class="info" id="info">Czytam listę banków…</span>
+  </div>
+  <div class="lista" id="lista"></div>
+  <div class="dol">Te same banki, którymi gra Alicja MIDI — lista leży w pliku <b>banki.txt</b> obok Alicji.<br>
+    Pobrany plik .sf2 otworzysz w Alicji MIDI (➕ Wczytaj bank), w samplerze, w VirtualMIDISynth, Polyphone albo w FL Studio.</div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+// ścieżki w banki.txt są liczone od Alicji (folder wyżej) — chyba że to pełny adres w internecie
+const adres = p => /^https?:\/\//i.test(p) ? p : '../' + p.replace(/^\.?\//, '');
+const mb = b => (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+const nazwaPliku = czesci => decodeURIComponent(czesci[0].split('/').pop()).replace(/\.cz\d+$/i, '').replace(/\.(part|czesc)\d+$/i, '');
+
+function czytajListe(tekst) {
+  return tekst.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#')).map(l => {
+    const [plik = '', nazwa = '', autor = '', strona = '', licencja = ''] = l.split('|').map(x => x.trim());
+    return { czesci: plik.split('+').map(x => x.trim()).filter(Boolean), nazwa, autor, strona, licencja };
+  }).filter(B => B.czesci.length);
+}
+// w opisie licencji: ścieżka do pliku .txt → link (od Alicji), adres www → link
+const licencjaHtml = t => esc(t).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+  .replace(/(^|\s)([\w\-./]+\.txt)\b/g, (m, s, p) => `${s}<a href="${esc(adres(p))}" target="_blank" rel="noopener">${esc(p.split('/').pop())}</a>`);
+
+async function rozmiar(czesci) {                 // rozmiar z serwera bez pobierania (nagłówek)
+  let suma = 0;
+  for (const c of czesci) { const r = await fetch(adres(c), { method: 'HEAD' }); if (!r.ok) throw new Error('HTTP ' + r.status); const n = +r.headers.get('content-length'); if (!n) return null; suma += n; }
+  return suma;
+}
+async function pobierz(B, el) {
+  const guz = el.querySelector('.duzy'), pasek = el.querySelector('.pasek'), stan = el.querySelector('.stan');
+  guz.disabled = true; pasek.style.display = 'block'; stan.classList.remove('zle'); stan.textContent = 'pobieram…';
+  try {
+    const kawalki = [], calosc = B.rozmiar || 0; let mam = 0;
+    for (let i = 0; i < B.czesci.length; i++) {
+      const r = await fetch(adres(B.czesci[i])); if (!r.ok) throw new Error('HTTP ' + r.status + (B.czesci.length > 1 ? ` przy kawałku ${i + 1}` : ''));
+      const czyt = r.body.getReader();
+      for (;;) { const { done, value } = await czyt.read(); if (done) break; kawalki.push(value); mam += value.length;
+        pasek.firstElementChild.style.width = calosc ? Math.min(100, mam / calosc * 100) + '%' : '50%';
+        stan.textContent = `pobieram… ${mb(mam)}${calosc ? ' z ' + mb(calosc) : ''}${B.czesci.length > 1 ? ` (kawałek ${i + 1} z ${B.czesci.length})` : ''}`; }
+    }
+    const plik = new Blob(kawalki, { type: 'application/octet-stream' }), nazwa = nazwaPliku(B.czesci);
+    // sprawdzenie: prawdziwy plik SoundFont zaczyna się od RIFF…sfbk
+    const nag = new Uint8Array(await plik.slice(0, 12).arrayBuffer()), znak = String.fromCharCode(...nag.slice(0, 4)) + String.fromCharCode(...nag.slice(8, 12));
+    if (/\.sf[23]$/i.test(nazwa) && znak !== 'RIFFsfbk') throw new Error('pobrany plik nie wygląda na bank SF2 — sprawdź kawałki w banki.txt');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(plik); a.download = nazwa; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    pasek.firstElementChild.style.width = '100%';
+    stan.textContent = `✔ ${nazwa} · ${mb(plik.size)}${B.czesci.length > 1 ? ' · kawałki sklejone w jeden plik' : ''}`;
+  } catch (e) { stan.classList.add('zle'); stan.textContent = '✖ ' + e.message; }
+  guz.disabled = false;
+}
+(async () => {
+  let L;
+  try { const r = await fetch('../banki.txt', { cache: 'no-cache' }); if (!r.ok) throw new Error('HTTP ' + r.status); L = czytajListe(await r.text()); }
+  catch (e) { $('info').textContent = ''; $('lista').innerHTML = `<div class="pusto">Nie mogę przeczytać listy <b>banki.txt</b> (${esc(e.message)}).<br>Ta strona działa na serwerze (GitHub Pages), obok Alicji MIDI.</div>`; return; }
+  if (!L.length) { $('info').textContent = ''; $('lista').innerHTML = '<div class="pusto">Na liście banki.txt nie ma jeszcze żadnego banku.</div>'; return; }
+  $('info').textContent = `${L.length} ${L.length === 1 ? 'bank' : L.length < 5 ? 'banki' : 'banków'} do pobrania`;
+  $('lista').innerHTML = L.map((B, i) => `<div class="bank" data-i="${i}">
+      <h2>${esc(B.nazwa || nazwaPliku(B.czesci))}</h2>
+      <div class="prawa"><button class="duzy">⬇ Pobierz</button><span class="roz">…</span><div class="pasek"><i></i></div><div class="stan"></div></div>
+      <div class="opis">${B.autor ? `Autor: <b>${esc(B.autor)}</b>` : ''}${B.strona ? ` · <a href="${esc(B.strona)}" target="_blank" rel="noopener">strona autora</a>` : ''}
+        ${B.licencja ? `<br>Licencja: ${licencjaHtml(B.licencja)}` : ''}<br>Plik: <b>${esc(nazwaPliku(B.czesci))}</b>${B.czesci.length > 1 ? ` · na serwerze w ${B.czesci.length} kawałkach — pobierzesz jeden gotowy plik` : ''}</div>
+    </div>`).join('');
+  L.forEach((B, i) => { const el = $('lista').querySelector(`[data-i="${i}"]`);
+    el.querySelector('.duzy').onclick = () => pobierz(B, el);
+    rozmiar(B.czesci).then(n => { B.rozmiar = n; el.querySelector('.roz').textContent = n ? mb(n) : ''; })
+      .catch(e => { el.querySelector('.roz').textContent = 'brak pliku na serwerze (' + e.message + ')'; el.querySelector('.roz').style.color = '#ff8a8a'; }); });
+})();
+</script>
+</body>
+</html>
