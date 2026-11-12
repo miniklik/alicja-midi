@@ -104,7 +104,26 @@ input[type=range] { accent-color:var(--zloto); }
 .kan .n { font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .kan.puste { opacity:.45; }
 /* klawiatura */
-#klawRamka { overflow-x:auto; padding-bottom:2px; }
+#klawRamka { overflow-x:auto; padding-bottom:2px; flex:0 0 auto; max-width:100%; }
+/* Klawiatura: po lewej szukanie klawiatury USB, po prawej Sampler MIDI i Banki SF2 */
+#klawRzad { display:flex; align-items:center; justify-content:center; gap:18px; }
+.klawBok { flex:0 1 172px; min-width:138px; display:flex; flex-direction:column; gap:8px; }
+.klawBok .duzy { display:flex; align-items:center; gap:7px; width:100%; box-sizing:border-box; padding:9px 9px; font-size:12.5px; font-weight:700; text-align:left; line-height:1.15; text-decoration:none;
+  color:#eaf2ff; background:linear-gradient(#1a52bd,#133f96 55%,#103580); border:1px solid #0a2763; border-radius:8px;
+  box-shadow:0 3px 6px #00000055, inset 0 1px 0 #ffffff30, inset 0 -2px 0 #00000030; transition:border-color .15s, filter .15s; }
+.klawBok .duzy:hover { border-color:var(--zloto); filter:brightness(1.12); color:#fff; }
+.klawBok .duzy:active { transform:translateY(1px); }
+.klawBok .duzy span { flex:none; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; background:#0b2a66; box-shadow:inset 0 1px 3px #000a, 0 1px 0 #ffffff25; }
+.klawBok .duzy small { display:block; font-weight:400; font-size:10px; color:#a9c6f5; margin-top:2px; }
+.klawBok .duzy b { font-weight:700; white-space:nowrap; }
+#bSzukajKlaw b { white-space:normal; }
+#bSzukajKlaw { min-height:100px; }
+.klawPara { display:flex; flex-direction:column; gap:0 !important; filter:drop-shadow(0 3px 4px #00000045); }
+.klawPara .duzy { box-shadow:inset 0 1px 0 #ffffff30, inset 0 -2px 0 #00000030; }
+.klawPara .duzy:first-child { border-radius:8px 8px 0 0; border-bottom-color:#082050; }
+.klawPara .duzy:last-child { border-radius:0 0 8px 8px; border-top:1px solid #2d66cf; }
+@media (max-width: 900px) { #klawRzad { flex-wrap:wrap; gap:8px; } #klawRamka { order:-1; flex:1 1 100%; } .klawBok { flex:1 1 auto; flex-direction:row; gap:0; } #bSzukajKlaw { min-height:0; }
+  .klawPara .duzy:first-child { border-radius:8px 0 0 8px; } .klawPara .duzy:last-child { border-radius:0 8px 8px 0; border-top:1px solid #0a2763; border-left:1px solid #2d66cf; } }
 #klaw { position:relative; height:56px; user-select:none; touch-action:none; margin:0 auto; }
 #klaw .b { position:absolute; top:0; width:13px; height:56px; background:linear-gradient(#f4f1e8,#d9d4c6); border:1px solid #555; border-radius:0 0 3px 3px; }
 #klaw .c { position:absolute; top:0; width:8px; height:34px; background:linear-gradient(#2b2b2b,#090909); border:1px solid #000; border-radius:0 0 2px 2px; z-index:2; }
@@ -351,7 +370,14 @@ input[type=range] { accent-color:var(--zloto); }
 
   <div class="ramka" data-ramka="klawiatura"><button class="zwin" title="Zwiń / rozwiń">▾</button>
     <div class="tytul"><b>Klawiatura</b><i></i></div>
-    <div id="klawRamka"><div id="klaw"></div></div>
+    <div id="klawRzad">
+      <div class="klawBok"><button class="duzy" id="bSzukajKlaw" title="Szukaj klawiatury USB podłączonej do komputera"><span>🔍</span><b>Szukaj klawiatury USB<small>podłącz i kliknij</small></b></button></div>
+      <div id="klawRamka"><div id="klaw"></div></div>
+      <div class="klawBok klawPara">
+        <a class="duzy" id="bSampler" href="sampler-midi.html" target="_blank" rel="noopener" title="Sampler MIDI — zrób własny bank SF2 z nagrań WAV"><span>🎛</span><b>Sampler MIDI<small>zrób własny bank</small></b></a>
+        <a class="duzy" id="bBanki" href="banki/" target="_blank" rel="noopener" title="Banki SF2 do pobrania"><span>📦</span><b>Banki SF2<small>do pobrania</small></b></a>
+      </div>
+    </div>
     <div id="klawUSB"></div>
     <div id="klawOpis">gra na kanale 1 · klawisze komputera Z…M i Q…U · klawiatura USB · spacja = graj / pauza</div>
   </div>
@@ -1780,6 +1806,15 @@ $('urzadzenie').onchange = () => { RECZNIE = true;
   else wybierzBank('system', MIDI_DOSTEP.outputs.get(v.slice(2)));
 };
 $('bSzukaj').onclick = () => szukaj();
+// 🔍 Szukaj klawiatury USB (przy klawiaturze): to samo zezwolenie co „Szukaj” na górze, ale mówi o WEJŚCIACH — klawiaturach
+$('bSzukajKlaw').onclick = async () => {
+  try { await dostepMidi(); } catch (e) { status('✖ ' + esc(e.message)); return; }
+  const w = [...MIDI_DOSTEP.inputs.values()]; podlaczWejscia();
+  status(w.length ? `🎹 Klawiatura USB: <b>${w.map(i => esc(i.name)).join('</b>, <b>')}</b> — graj, nuty idą na kanał ${kanalGry() + 1}.`
+    : '🎹 Nie widzę żadnej klawiatury USB. Podłącz ją (i włącz), potem kliknij jeszcze raz.');
+  $('klawUSB').innerHTML = w.length ? `🎹 <b>${w.map(i => esc(i.name)).join(', ')}</b> — podłączona` : '🎹 brak klawiatury USB'; $('klawUSB').classList.add('widac');
+};
+
 $('bUsun').onclick = () => { const i = BANKI.indexOf(BANK); if (i < 0 || BANK.domyslny) return; usunZPamieci(BANK.plik);
   if (SPESSA && SPESSA_BANK === BANK.plik) { SPESSA.soundBankManager.deleteSoundBank(SPESSA_BANK).catch(() => {}); SPESSA_BANK = null; } BANKI.splice(i, 1); wybierzBank(BANKI.find(B => B.domyslny) || 'alicja'); };
 $('bBank').onclick = () => { RECZNIE = true; $('plikSF').click(); };
