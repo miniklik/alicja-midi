@@ -104,6 +104,17 @@
   #bibLista .poz i{font-style:normal;color:#7fb8ff;width:70px;flex:none;font-family:Consolas,monospace;font-size:12px}
   #bibLista .poz span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #bibLista .poz small{color:#8fa8cf}
+  #bibLista .poz.on{background:#3a3220}
+  #bibLista .poz.on span{color:var(--zloto);font-weight:700}
+  #bibLista .poz input{accent-color:var(--zloto);width:15px;height:15px;margin:0;cursor:pointer;flex:none}
+  #bibLista .plikB small{color:#8fa8cf;font-weight:400}
+  #bibKlaw{position:relative;height:74px;margin-top:8px;user-select:none;touch-action:none}
+  #bibKlaw div{position:absolute;top:0;border:1px solid #222;border-radius:0 0 4px 4px}
+  #bibKlaw .b{height:100%;background:linear-gradient(#f4f7ff,#cfd8ea);z-index:1}
+  #bibKlaw .c{height:60%;background:linear-gradient(#2a2e38,#0d0f13);z-index:2}
+  #bibKlaw .b.gra{background:linear-gradient(#ffe7a0,#f1c24a)}
+  #bibKlaw .c.gra{background:linear-gradient(#a5862c,#6b5418)}
+  #bibWstaw:disabled{opacity:.4;cursor:default}
   #klaw .wybrany{outline:3px solid var(--zloto);outline-offset:-3px}
   #klaw .b.gra{background:linear-gradient(#7fb1ff,#cfe0fb);color:#0e1d33}
   #klaw .c.gra{background:linear-gradient(#2c72e6,#5a96f5)}
@@ -222,7 +233,8 @@
         <button class="guz" id="zSf2" title="Weź gotowy głos z pliku SF2 — swojego albo cudzego — pod ten numer">📚 Z SF2…</button>
         <label class="opcja" title="puste klawisze grają najbliższe nagranie, przestrojone (brązowe)"><input type="checkbox" id="uzup"><span class="lamp"></span>uzupełniaj sąsiadem</label>
         <label class="opcja" title="każdy klawisz odrobinę inaczej, najwyżej ±1,5 centa"><input type="checkbox" id="zywe"><span class="lamp"></span>żywe rozstrojenie</label>
-        <button class="guz" id="wyczysc" style="margin-left:auto" title="Usuń wszystkie nagrania tego głosu (można cofnąć)">🗑 Wyczyść</button>
+        <button class="guz" id="usunDzw" style="margin-left:auto" title="Usuń nagranie z zaznaczonego klawisza (można cofnąć)" disabled>✖ Usuń dźwięk</button>
+        <button class="guz" id="wyczysc" title="Usuń wszystkie nagrania tego głosu (można cofnąć)">🗑 Wyczyść</button>
       </div>
       <div id="klawisze"><div id="klaw"></div></div>
       <div id="legenda">
@@ -241,6 +253,7 @@
       <div class="petle">
         <button class="guz" id="petla" title="Sam znajduje dobre miejsce na pętlę w tym nagraniu i robi płynne przejście">🔁 Zrób pętlę</button>
         <button class="guz" id="petleWsz" title="To samo dla wszystkich nagrań tego głosu (zastępuje ich pętle)">🔁 Pętle w całym głosie</button>
+        <button class="guz" id="zapWav" title="Zapisz nagranie tego klawisza jako plik WAV" disabled>💾 Zapisz WAV</button>
         <button class="guz" id="oryginal" title="Przywróć nagranie sprzed zrobienia pętli" hidden>↶ Oryginał</button>
       </div>
     </div>
@@ -552,6 +565,7 @@ function opiszKlawisz() {
   const n = wybranyKlawisz, dl = $('opis'), wk = n != null ? R().nuty[n] : null;
   if (wzorOn) { opiszWzor(n); return; }
   $('petla').disabled = !wk; $('petleWsz').disabled = !Object.keys(R().nuty).length; $('oryginal').hidden = !(wk && wk.oryginal);
+  $('zapWav').disabled = $('usunDzw').disabled = !wk;
   if (n == null) { dl.innerHTML = '<dt>Klawisz</dt><dd>kliknij klawisz, żeby zobaczyć jego nagranie</dd>'; czyscFale(); rysujEdycje(); return; }
   const w = R().nuty[n], z = w || !R().uzup ? null : sasiad(R(), n);
   if (!w) { czyscFale(); rysujEdycje(); dl.innerHTML = `<dt>Klawisz</dt><dd>${nazwaNuty(n)} (${n})</dd><dt>Nagranie</dt><dd>${z != null ? `brak — gra pożyczone od <b>${nazwaNuty(z)}</b> (${z}), przestrojone o ${n - z > 0 ? '+' : ''}${n - z} ${odm(Math.abs(n - z), 'półton', 'półtony', 'półtonów')}` : 'brak — przeciągnij na niego plik WAV'}</dd>`; return; }
@@ -717,6 +731,7 @@ $('opisBanku').oninput = e => { bank.opis = e.target.value; zmiany = true; $('op
 const ostatniWGrupie = {};                                 // który numer był ostatnio wybrany w każdej grupie
 function wybierz(i) {
   akt = i; ostatniWGrupie[grupaGlosu(i)] = i; wybranyKlawisz = null; [...grajace.keys()].forEach(pusc); rysuj();
+  if (wzorOn && WZOR && WZOR.duzy) doczytajWzor(i).catch(() => {});
   if (wzorOn) { komunikatWzoru(); return; }
   komunikat(`<b>${esc(numerGl(i))}</b>${R().nazwa ? ' · Twój głos „' + esc(R().nazwa) + '”' : ''}: ${ileW(i) ? 'kliknij klawisz, żeby posłuchać.' : 'pusty — przeciągnij na klawiaturę nagrania WAV albo weź gotowy głos przyciskiem <b>📚 Z SF2…</b>'}`
     + (i === PERK ? '<br>Perkusja: każdy klawisz to inny bęben GM — najedź na klawisz, zobaczysz jaki (36 stopa, 38 werbel, 42 hi-hat…).' : ''));
@@ -733,16 +748,40 @@ $('wyczysc').onclick = () => {
   komunikat(`Wyczyszczony głos <b>${esc(nazwaGl(akt))}</b> (${ile} ${odm(ile, 'nagranie', 'nagrania', 'nagrań')}). <button class="guz" id="cofnij" style="height:26px;margin-left:6px">↶ Cofnij</button>`);
   $('cofnij').onclick = () => { g.nuty = kopia; rysuj(); komunikat('Przywrócone.'); }; };
 
+// ✖ Usuń dźwięk: nagranie z zaznaczonego klawisza precz (to samo co Shift + klik), z możliwością cofnięcia
+$('usunDzw').onclick = () => {
+  const n = wybranyKlawisz, g = R(), w = n != null && g.nuty[n]; if (!w) return;
+  delete g.nuty[n]; zmiany = true; rysuj();
+  komunikat(`Usunięte nagranie z klawisza <b>${nazwaNuty(n)}</b> (${n}). <button class="guz" id="cofnij" style="height:26px;margin-left:6px">↶ Cofnij</button>`);
+  $('cofnij').onclick = () => { g.nuty[n] = w; zmiany = true; rysuj(); komunikat(`Przywrócone nagranie <b>${nazwaNuty(n)}</b>.`); }; };
+// 💾 Zapisz WAV: nagranie zaznaczonego klawisza. WAV — bajt w bajt taki, jaki jest w samplerze (z pętlą); inne (Opus, NCW) — rozpakowane do WAV 16 bit
+$('zapWav').onclick = async () => {
+  const n = wybranyKlawisz, w = n != null && R().nuty[n]; if (!w) return;
+  const nazwa = (w.nazwa || nazwaNuty(n)).replace(/\.(wav|ncw|opus|ogg)$/i, '') + '.wav';
+  let dane;
+  if (!w.opus && /\.wav$/i.test(w.plik.name || w.nazwa || '')) dane = w.plik;
+  else { try { startAudio(); const b = await bufor(w), kan = Math.min(2, b.numberOfChannels), N = b.length, ab = new ArrayBuffer(44 + N * kan * 2), v = new DataView(ab), nap = (o, t) => [...t].forEach((z, j) => v.setUint8(o + j, z.charCodeAt(0)));
+      nap(0, 'RIFF'); v.setUint32(4, 36 + N * kan * 2, true); nap(8, 'WAVE'); nap(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, kan, true);
+      v.setUint32(24, b.sampleRate, true); v.setUint32(28, b.sampleRate * kan * 2, true); v.setUint16(32, kan * 2, true); v.setUint16(34, 16, true); nap(36, 'data'); v.setUint32(40, N * kan * 2, true);
+      const ch = [...Array(kan)].map((_, k) => b.getChannelData(k)); let o = 44;
+      for (let i = 0; i < N; i++) for (let k = 0; k < kan; k++, o += 2) v.setInt16(o, Math.max(-32768, Math.min(32767, Math.round(ch[k][i] * 32767))), true);
+      dane = new Blob([ab], { type: 'audio/wav' }); }
+    catch (e) { komunikat(`✖ Nie umiem zapisać <b>${esc(w.nazwa)}</b>: ${esc(e.message)}`); return; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(dane); a.download = nazwa; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  komunikat(`💾 Zapisane: <b>${esc(nazwa)}</b> (klawisz ${nazwaNuty(n)}).`); };
+
 /* ---------- granie: myszką, klawiaturą komputera i USB (kilka klawiszy naraz) ---------- */
 const grajace = new Map();
 function wcisnij(n) {
   if (grajace.has(n) || n < OD || n > DO) return;
   const kk = $('klaw').querySelector(`[data-n="${n}"]`); if (kk) kk.classList.add('gra');
+  document.querySelectorAll(`#bibKlaw [data-n="${n}"]`).forEach(k => k.classList.add('gra'));
   grajace.set(n, graj(n));
 }
 function pusc(n) {
   const p = grajace.get(n); if (!p) return; grajace.delete(n);
   const kk = $('klaw').querySelector(`[data-n="${n}"]`); if (kk && !WCIS.has(akt + ':' + n)) kk.classList.remove('gra');
+  document.querySelectorAll(`#bibKlaw [data-n="${n}"]`).forEach(k => k.classList.remove('gra'));
   p.then(f => f && f());
 }
 /* ---------- GRANIE NAGRANIA z EDYCJĄ DŹWIĘKU (wspólne dla samplera i Alicji 3 — ten sam kod w obu plikach) ----------
@@ -791,6 +830,7 @@ function zagrajNagranie(buf, d, edycja, szyb, cel, kiedy, bend) {     // kiedy: 
 
 async function graj(n) {
   startAudio();
+  if (ODSL) return grajOdsluch(n);                             // okienko 📚 Z SF2…: odsłuch klikniętego instrumentu
   if (wzorOn) return grajWzor(n);
   const rej = R(), wl = rej.nuty[n], zrodlo = wl ? n : rej.uzup ? sasiad(rej, n) : null;
   if (zrodlo == null) { komunikat(Object.keys(rej.nuty).length ? `Klawisz <b>${nazwaNuty(n)}</b> nie ma nagrania — przeciągnij na niego plik.` : `Głos <b>${esc(nazwaGl(akt))}</b> jest jeszcze pusty — przeciągnij nagrania WAV na klawiaturę.`); return null; }
@@ -950,7 +990,7 @@ $('plikiInput').onchange = e => { dodajNagrania(e.target.files); e.target.value 
 
 /* ---------- okienko pytania ---------- */
 function pytaj(html, poOtwarciu) { $('pytanie').classList.remove('szeroki'); $('pytanie').innerHTML = html; $('zaslona').classList.add('on'); if (poOtwarciu) poOtwarciu(); }
-function zamknij() { $('zaslona').classList.remove('on'); }
+function zamknij() { $('zaslona').classList.remove('on'); if (ODSL) { [...grajace.keys()].forEach(pusc); ODSL = null; } }
 
 /* =====================================================================
    SF2 (SoundFont 2) — ZAPIS i ODCZYT
@@ -1158,9 +1198,34 @@ async function zrobSf2() {
   return { blob: new Blob([glowa, infoL, sdta, pdta], { type: 'audio/x-soundfont' }), uwagi, presety: phdr.length, probek: shdr.length };
 }
 
-/* ---------- ODCZYT SF2 → głosy samplera (żeby wymienić próbki i zapisać znowu) ---------- */
+/* ---------- ODCZYT SF2 → głosy samplera (żeby wymienić próbki i zapisać znowu) ----------
+   Bank do 512 MB czytam w całości (jak zawsze). WIĘKSZY (np. 2 GB) — przeglądarka nie wczyta go naraz, więc czytam tylko SPIS
+   (presety, strefy, nagłówki próbek), a nagrania doczytuję z pliku dopiero, gdy barwa trafia do zakładki albo gra jako wzór. */
+const DUZY_BANK = 512 * 1048576;
+const czytajKawalek = async (plik, o, n) => new Uint8Array(await plik.slice(o, o + n).arrayBuffer());
+async function spisSf2(plik) {                                // duży plik → mały „plik na niby”: INFO + spis + sam nagłówek próbek
+  const id4 = (u, o) => String.fromCharCode(u[o], u[o + 1], u[o + 2], u[o + 3]), u32 = (u, o) => (u[o] | u[o + 1] << 8 | u[o + 2] << 16 | u[o + 3] << 24) >>> 0;
+  const g = await czytajKawalek(plik, 0, 12);
+  if (g.length < 12 || id4(g, 0) !== 'RIFF' || id4(g, 8) !== 'sfbk') throw new Error('to nie jest plik SF2');
+  const L = {};
+  for (let o = 12; o + 12 <= plik.size;) { const h = await czytajKawalek(plik, o, 12), i = id4(h, 0), n = u32(h, 4);
+    if (i === 'LIST') L[id4(h, 8)] = { o: o + 12, n: n - 4 }; o += 8 + n + (n & 1); }
+  if (!L.pdta || !L.sdta) throw new Error('w pliku brakuje spisu albo próbek');
+  let smpl = null;
+  for (let o = L.sdta.o; o + 8 <= L.sdta.o + L.sdta.n;) { const h = await czytajKawalek(plik, o, 8), n = u32(h, 4); if (id4(h, 0) === 'smpl') { smpl = { o: o + 8, n }; break; } o += 8 + n + (n & 1); }
+  if (!smpl) throw new Error('w pliku brakuje części „smpl”');
+  const INFO = L.INFO ? await czytajKawalek(plik, L.INFO.o, L.INFO.n) : new Uint8Array(0), PD = await czytajKawalek(plik, L.pdta.o, L.pdta.n);
+  const lista = (t, b) => { const u = new Uint8Array(12 + b.length); u.set([76, 73, 83, 84]); new DataView(u.buffer).setUint32(4, 4 + b.length, true);
+    u.set([...t].map(c => c.charCodeAt(0)), 8); u.set(b, 12); return u; };
+  const smH = new Uint8Array(8); smH.set([115, 109, 112, 108]); new DataView(smH.buffer).setUint32(4, smpl.n, true);
+  const czesci = [lista('INFO', INFO), lista('pdta', PD), lista('sdta', smH)], dl = 4 + czesci.reduce((s, c) => s + c.length, 0), u = new Uint8Array(8 + dl);
+  u.set([82, 73, 70, 70]); new DataView(u.buffer).setUint32(4, dl, true); u.set([115, 102, 98, 107], 8);
+  let o = 12; czesci.forEach(c => { u.set(c, o); o += c.length; });
+  return { ab: u.buffer, smplWPliku: smpl.o };
+}
 async function czytajSf2(plik) {
-  const ab = await plik.arrayBuffer(), v = new DataView(ab), u8 = new Uint8Array(ab);
+  const duzy = plik.size > DUZY_BANK, spis = duzy ? await spisSf2(plik) : null;
+  const ab = duzy ? spis.ab : await plik.arrayBuffer(), v = new DataView(ab), u8 = new Uint8Array(ab);
   const id = o => String.fromCharCode(u8[o], u8[o + 1], u8[o + 2], u8[o + 3]);
   if (ab.byteLength < 12 || id(0) !== 'RIFF' || id(8) !== 'sfbk') throw new Error('to nie jest plik SF2');
   const ch = {}, inf = {};
@@ -1179,6 +1244,13 @@ async function czytajSf2(plik) {
   const SH = rek('shdr', 46, o => ({ nazwa: napis(o, 20), start: v.getUint32(o + 20, true), end: v.getUint32(o + 24, true), sl: v.getUint32(o + 28, true), el: v.getUint32(o + 32, true),
     fr: v.getUint32(o + 36, true), root: u8[o + 40], korekta: v.getInt8(o + 41), link: v.getUint16(o + 42, true), typ: v.getUint16(o + 44, true) }));
   const S = ch.smpl.o;                                         // próbka nr i: Int16 pod S + 2i
+  const NAGR = new Map(), klN = sh => sh.start + ':' + sh.end;
+  const daj = sh => { if (duzy) return NAGR.get(klN(sh)) || null;      // nagranie próbki → Int16
+    const n = Math.max(0, sh.end - sh.start), a = new Int16Array(n); for (let j = 0; j < n; j++) a[j] = v.getInt16(S + 2 * (sh.start + j), true); return a; };
+  const doczytaj = async lista => { if (!duzy) return;              // duży bank: brakujące nagrania z pliku (każde raz)
+    for (const sh of lista) { if (!sh || NAGR.has(klN(sh)) || sh.end <= sh.start) continue;
+      const b = await czytajKawalek(plik, spis.smplWPliku + 2 * sh.start, 2 * (sh.end - sh.start)), a = new Int16Array(b.length >> 1), dv = new DataView(b.buffer, b.byteOffset, b.length);
+      for (let j = 0; j < a.length; j++) a[j] = dv.getInt16(2 * j, true); NAGR.set(klN(sh), a); } };
   const strefy = (bagi, gens, od, doo) => { const z = []; for (let b = od; b < doo; b++) { const m = new Map(); for (let gI = bagi[b]; gI < bagi[b + 1]; gI++) m.set(gens[gI].op, gens[gI]); z.push(m); } return z; };
   const uwagi = [], glosy = [];
   for (let p = 0; p < PH.length - 1; p++) {
@@ -1212,7 +1284,8 @@ async function czytajSf2(plik) {
       nap = (o, t) => [...t].forEach((z, j) => w.setUint8(o + j, z.charCodeAt(0)));
     nap(0, 'RIFF'); w.setUint32(4, 36 + dane, true); nap(8, 'WAVE'); nap(12, 'fmt '); w.setUint32(16, 16, true); w.setUint16(20, 1, true); w.setUint16(22, kan, true);
     w.setUint32(24, fr, true); w.setUint32(28, fr * kan * 2, true); w.setUint16(32, kan * 2, true); w.setUint16(34, 16, true); nap(36, 'data'); w.setUint32(40, dane, true);
-    for (let i = 0, o = 44; i < n; i++) for (let c = 0; c < kan; c++, o += 2) w.setInt16(o, v.getInt16(S + 2 * (lista[c].start + i), true), true);
+    const dane16 = lista.map(daj);
+    for (let i = 0, o = 44; i < n; i++) for (let c = 0; c < kan; c++, o += 2) w.setInt16(o, dane16[c][i] || 0, true);
     return b; };
   const wavProbki = new Map();                             // jedna próbka z pliku = jeden WAV (ten sam dla wielu klawiszy)
   const zbuduj = gl => {                                     // jeden preset → głos samplera (nagrania jako WAV)
@@ -1270,8 +1343,9 @@ async function czytajSf2(plik) {
   };
   // spis wszystkich presetów z pliku — lekki; nagrania wyciągam dopiero, gdy głos trafia do zakładki
   const presety = glosy.map((gl, k) => ({ k, nazwa: gl.nazwa, perk: gl.perk, program: gl.program, bank: PH[k].bank, ile: new Set(gl.probki.map(z => z.root)).size }));
-  return { plik: plik.name, presety, surowe: { glosy, SH, v, S }, nazwa: infoTekst('INAM'), autor: infoTekst('IENG'), opis: infoTekst('ICMT'), uwagi,
-    zbuduj: k => { const od = uwagi.length, g = zbuduj(glosy[k]); return { g, uwagi: uwagi.slice(od) }; } };
+  const nagraniaGlosu = gl => gl.probki.flatMap(z => [z.sh, z.sh.typ & 6 ? SH[z.sh.link] : null]);   // z drugą stroną pary stereo
+  return { plik: plik.name, duzy, rozmiar: plik.size, presety, surowe: { glosy, SH, v, S, daj, doczytaj }, nazwa: infoTekst('INAM'), autor: infoTekst('IENG'), prawa: infoTekst('ICOP'), opis: infoTekst('ICMT'), uwagi,
+    zbuduj: async k => { await doczytaj(nagraniaGlosu(glosy[k])); const od = uwagi.length, g = zbuduj(glosy[k]); return { g, uwagi: uwagi.slice(od) }; } };
 }
 
 $('zapisz').onclick = () => {
@@ -1299,7 +1373,7 @@ $('zapisz').onclick = () => {
         if (uchwyt) {
           const wr = await uchwyt.createWritable(); await wr.write(blob); await wr.close();
           const spr = await czytajSf2(await uchwyt.getFile());          // sprawdzenie: czytam zapisany plik z powrotem
-          const sprG = spr.presety.map(x => spr.zbuduj(x.k).g), ile = sprG.reduce((s, g) => s + Object.keys(g.nuty).length, 0);
+          const sprG = (await Promise.all(spr.presety.map(x => spr.zbuduj(x.k)))).map(x => x.g), ile = sprG.reduce((s, g) => s + Object.keys(g.nuty).length, 0);
           zmiany = false;
           komunikat(`✔ Zapisane i sprawdzone: <b>${esc(uchwyt.name)}</b> · ${mb(blob.size)} · ${sprG.length} ${odm(sprG.length, 'preset', 'presety', 'presetów')}, ${ile} ${odm(ile, 'nagranie', 'nagrania', 'nagrań')} (${probek} ${odm(probek, 'próbka', 'próbki', 'próbek')} w pliku).` + dopisek);
         } else {
@@ -1318,20 +1392,55 @@ $('zapisz').onclick = () => {
 const BIBLIOTEKA = [];                                     // { plik, presety, zbuduj }
 function dodajDoBiblioteki(w) { const i = BIBLIOTEKA.findIndex(b => b.plik === w.plik); if (i >= 0) BIBLIOTEKA.splice(i, 1); BIBLIOTEKA.push(w); }
 const numerPresetu = x => x.perk ? '🥁 perk.' : (x.bank ? `b${x.bank}:` : '') + String(x.program + 1).padStart(3, '0');
+// ODSŁUCH w okienku: kliknięty instrument gra na klawiaturce (myszka, klawiatura komputera, USB) — zanim go wstawisz
+var ODSL = null;                                               // { b, k } — który instrument słychać
+const BUF_ODS = new Map();
+async function grajOdsluch(n) {
+  const { b, k } = ODSL, s = b.surowe, pas = s.glosy[k].probki.filter(z => n >= z.lo && n <= z.hi); if (!pas.length) return null;
+  let st = pas.filter(z => 100 >= z.vlo && 100 <= z.vhi); if (!st.length) st = [pas[0]];
+  await s.doczytaj(st.map(z => z.sh)); if (!ODSL || ODSL.b !== b || ODSL.k !== k) return null;
+  const stopy = st.map(z => {
+    const sh = z.sh, kl = b.plik + ':' + sh.start + ':' + sh.end;
+    if (!BUF_ODS.has(kl)) { const p = s.daj(sh); if (!p) return null; const ab = audio.createBuffer(1, Math.max(1, p.length), sh.fr || 44100), d = ab.getChannelData(0);
+      for (let j = 0; j < p.length; j++) d[j] = p[j] / 32768; BUF_ODS.set(kl, ab); }
+    const sc = z.tc(56) != null ? z.tc(56) : 100, szyb = Math.pow(2, ((n - z.root) * sc + z.fine) / 1200);
+    const petla = z.tryb === 1 || z.tryb === 3 ? [sh.sl - sh.start, sh.el - sh.start] : null;
+    const g = audio.createGain(); g.gain.value = Math.pow(10, -0.4 * Math.max(0, z.tc(48) || 0) / 200);
+    if (z.tc(17)) { const pn = audio.createStereoPanner(); pn.pan.value = Math.max(-1, Math.min(1, z.tc(17) / 500)); g.connect(pn); pn.connect(kompresor); } else g.connect(kompresor);
+    return zagrajNagranie(BUF_ODS.get(kl), { petla, czest: sh.fr, wybrzmienie: z.tryb === 3 && petla ? petla[1] : null }, edycjaStrefy(z), szyb, g);
+  });
+  if (!stopy.some(Boolean)) return null;
+  return c => stopy.forEach(f => f && f(c));
+}
 function oknoBiblioteki() {
-  pytaj(`<h3>📚 Głos z pliku SF2 → ${esc(numerGl(akt))}</h3>
-    Kliknij instrument — wejdzie pod numer <b>${esc(numerGl(akt))}</b> razem ze swoimi nagraniami, w miejsce tego, co tam jest.
+  const ZAZN = new Set();                                      // zaznaczone ☑: „nr pliku:nr instrumentu”
+  pytaj(`<h3>📚 Głos z pliku SF2</h3>
+    Kliknij nazwę — posłuchaj na klawiaturce. Zaznacz ☑ i <b>Wstaw</b>: jeden instrument wejdzie pod <b>${esc(numerGl(akt))}</b>, kilka — każdy pod swój numer.
     <div class="rzad" style="align-items:center;margin-top:8px"><input type="text" id="bibSzukaj" placeholder="szukaj, np. flute, organ, 75…" style="flex:1">
       <button id="bibPlik">📂 Wczytaj plik SF2…</button></div>
     <div id="bibLista"></div>
-    <div class="rzad"><button id="bibZamknij">Zamknij</button><span id="bibStan" style="font-size:12px;color:#8fa8cf;align-self:center"></span></div>`, () => {
+    <div id="bibKlaw"></div>
+    <div class="rzad"><button class="glowny" id="bibWstaw" disabled>⬇ Wstaw zaznaczone</button><button id="bibZamknij">Zamknij</button><span id="bibStan" style="font-size:12px;color:#8fa8cf;align-self:center"></span></div>`, () => {
     $('pytanie').classList.add('szeroki');
     const lista = () => { const q = $('bibSzukaj').value.trim().toLowerCase();
       $('bibLista').innerHTML = BIBLIOTEKA.length ? BIBLIOTEKA.map((b, bi) => {
         const poz = b.presety.filter(x => !q || x.nazwa.toLowerCase().includes(q) || numerPresetu(x).includes(q));
-        return poz.length ? `<div class="plikB">${esc(b.plik)} · ${b.presety.length} ${odm(b.presety.length, 'instrument', 'instrumenty', 'instrumentów')}</div>`
-          + poz.map(x => `<div class="poz" data-b="${bi}" data-k="${x.k}"><i>${numerPresetu(x)}</i><span>${esc(x.nazwa)}</span><small>${x.ile} ${odm(x.ile, 'nagranie', 'nagrania', 'nagrań')}</small></div>`).join('') : ''; }).join('')
-        : '<div style="padding:20px;color:#8fa8cf;text-align:center">Nie ma jeszcze otwartego pliku SF2 — kliknij <b>📂 Wczytaj plik SF2…</b> (możesz wybrać kilka plików naraz).</div>'; };
+        return poz.length ? `<div class="plikB">${esc(b.plik)} · ${b.presety.length} ${odm(b.presety.length, 'instrument', 'instrumenty', 'instrumentów')}`
+          + `${b.autor ? ` <small>· ${esc(b.autor)}</small>` : ''}${b.prawa ? ` <small>· © ${esc(b.prawa)}</small>` : ''}</div>`
+          + poz.map(x => { const kl = bi + ':' + x.k, on = ODSL && ODSL.b === b && ODSL.k === x.k;
+            return `<div class="poz${on ? ' on' : ''}" data-b="${bi}" data-k="${x.k}"><input type="checkbox"${ZAZN.has(kl) ? ' checked' : ''}><i>${numerPresetu(x)}</i><span>${esc(x.nazwa)}</span><small>${x.ile} ${odm(x.ile, 'nagranie', 'nagrania', 'nagrań')}</small></div>`; }).join('') : ''; }).join('')
+        : '<div style="padding:20px;color:#8fa8cf;text-align:center">Nie ma jeszcze otwartego pliku SF2 — kliknij <b>📂 Wczytaj plik SF2…</b> (możesz wybrać kilka plików naraz).</div>';
+      $('bibWstaw').disabled = !ZAZN.size; $('bibWstaw').textContent = ZAZN.size ? `⬇ Wstaw zaznaczone (${ZAZN.size})` : '⬇ Wstaw zaznaczone'; };
+    // klawiaturka: 4 oktawy (C2–C6), myszką; gra też klawiatura komputera i USB
+    { const KL = $('bibKlaw'), od = 36, doN = 84, cz = [1, 3, 6, 8, 10], biale = []; for (let n = od; n <= doN; n++) if (!cz.includes(n % 12)) biale.push(n);
+      const sz = 100 / biale.length;
+      biale.forEach((n, i) => { const d = document.createElement('div'); d.className = 'b'; d.dataset.n = n; d.style.left = i * sz + '%'; d.style.width = sz + '%'; KL.appendChild(d); });
+      for (let n = od; n <= doN; n++) if (cz.includes(n % 12)) { const i = biale.indexOf(n - 1), d = document.createElement('div'); d.className = 'c'; d.dataset.n = n;
+        d.style.left = (i + 1) * sz - sz * 0.32 + '%'; d.style.width = sz * 0.64 + '%'; KL.appendChild(d); }
+      let w = null; const nuta = e => { const el = document.elementFromPoint(e.clientX, e.clientY); return el && el.parentNode === KL && el.dataset.n ? +el.dataset.n : null; };
+      KL.onpointerdown = e => { if (!ODSL) { $('bibStan').textContent = 'Najpierw kliknij nazwę instrumentu.'; return; } KL.setPointerCapture(e.pointerId); w = nuta(e); if (w != null) wcisnij(w); };
+      KL.onpointermove = e => { if (w == null) return; const n = nuta(e); if (n != null && n !== w) { pusc(w); w = n; wcisnij(n); } };
+      KL.onpointerup = KL.onpointercancel = () => { if (w != null) pusc(w); w = null; }; }
     lista(); $('bibSzukaj').oninput = lista; $('bibSzukaj').focus();
     $('bibZamknij').onclick = zamknij;
     $('bibPlik').onclick = () => $('sf2Input').click();
@@ -1339,18 +1448,38 @@ function oknoBiblioteki() {
         $('bibStan').textContent = '⏳ czytam ' + f.name + '…';
         try { dodajDoBiblioteki(await czytajSf2(f)); } catch (er) { $('bibStan').textContent = '✖ ' + f.name + ': ' + er.message; continue; } }
       if (!/✖/.test($('bibStan').textContent)) $('bibStan').textContent = ''; lista(); };
-    $('bibLista').onclick = e => { const el = e.target.closest('.poz'); if (!el) return;
-      wylaczWzor('wstawiasz głos z SF2');
-      const b = BIBLIOTEKA[+el.dataset.b], x = b.presety.find(p => p.k === +el.dataset.k), stary = R();
-      if (Object.keys(stary.nuty).length && !confirm(`Pod numerem ${numerGl(akt)} jest już głos „${nazwaGl(akt)}” (${Object.keys(stary.nuty).length} nagrań). Wstawić w to miejsce „${x.nazwa}”?`)) return;
-      const { g, uwagi } = b.zbuduj(x.k);
-      // głos dostaje numer, który wybrałeś (miejsce = numer); nazwa z pliku zostaje, jeśli to nie jest zwykła nazwa GM tego numeru
-      g.perk = akt === PERK; g.program = akt === PERK ? 0 : akt;
-      if (!g.nazwa && x.nazwa !== ascii(nazwaGl(akt)).slice(0, 19).trim()) g.nazwa = x.nazwa.slice(0, 19);
-      bank.glosy[akt] = g; wybranyKlawisz = null; zmiany = true; zamknij(); rysuj();
-      const n = Object.keys(g.nuty).length;
-      komunikat(`📚 Pod numer <b>${esc(numerGl(akt))}</b> wszedł <b>${esc(x.nazwa)}</b> (w pliku ${esc(b.plik)}: ${numerPresetu(x)}) — ${n} ${odm(n, 'nagranie', 'nagrania', 'nagrań')}.`
-        + (uwagi.length ? `<br>⚠ ${uwagi.slice(0, 3).map(esc).join('<br>⚠ ')}${uwagi.length > 3 ? '…' : ''}` : ''));
+    $('bibLista').onclick = async e => { const el = e.target.closest('.poz'); if (!el) return;
+      const b = BIBLIOTEKA[+el.dataset.b], k = +el.dataset.k, kl = el.dataset.b + ':' + k;
+      if (e.target.tagName === 'INPUT') { if (e.target.checked) ZAZN.add(kl); else ZAZN.delete(kl); lista(); return; }
+      wylaczWzor('słuchasz instrumentu z SF2'); [...grajace.keys()].forEach(pusc);
+      ODSL = { b, k }; lista(); startAudio();
+      const x = b.presety.find(p => p.k === k);
+      $('bibStan').textContent = (b.duzy ? '⏳ doczytuję nagrania…' : '');
+      if (b.duzy) { await b.surowe.doczytaj(b.surowe.glosy[k].probki.map(z => z.sh)); if (!ODSL || ODSL.k !== k || ODSL.b !== b) return; }
+      $('bibStan').textContent = '🎹 ' + x.nazwa + ' — graj na klawiaturce.'; };
+    $('bibWstaw').onclick = async () => {
+      const wyb = [...ZAZN].map(kl => { const [bi, k] = kl.split(':').map(Number), b = BIBLIOTEKA[bi]; return { b, x: b.presety.find(p => p.k === k) }; });
+      const gdzie = wyb.length === 1 ? [akt] : wyb.map(({ x }) => x.perk ? PERK : Math.min(127, x.program));   // jeden → zaznaczony numer; kilka → każdy pod swój numer
+      const zajete = [...new Set(gdzie)].filter(i => Object.keys(bank.glosy[i].nuty).length);
+      if (zajete.length && !confirm(zajete.length === 1 ? `Pod numerem ${numerGl(zajete[0])} jest już głos „${nazwaGl(zajete[0])}”. Wstawić w to miejsce?`
+        : `${zajete.length} numerów ma już głosy (${zajete.slice(0, 4).map(numerGl).join(', ')}${zajete.length > 4 ? '…' : ''}). Wstawić w ich miejsce?`)) return;
+      wylaczWzor('wstawiasz głos z SF2'); ODSL = null; [...grajace.keys()].forEach(pusc);
+      const uw = [], dwa = gdzie.length !== new Set(gdzie).size;
+      for (let j = 0; j < wyb.length; j++) { const { b, x } = wyb[j], i = gdzie[j];
+        $('bibStan').textContent = `⏳ wstawiam ${j + 1} z ${wyb.length}: ${x.nazwa}…`;
+        const { g, uwagi } = await b.zbuduj(x.k); uw.push(...uwagi);
+        // głos dostaje numer miejsca; nazwa z pliku zostaje, jeśli to nie jest zwykła nazwa GM tego numeru
+        g.perk = i === PERK; g.program = i === PERK ? 0 : i;
+        if (!g.nazwa && x.nazwa !== ascii(nazwaGl(i)).slice(0, 19).trim()) g.nazwa = x.nazwa.slice(0, 19);
+        bank.glosy[i] = g; }
+      if (wyb.length === 1) akt = gdzie[0];
+      wybranyKlawisz = null; zmiany = true; zamknij(); rysuj();
+      const { b, x } = wyb[0], n = Object.keys(bank.glosy[gdzie[0]].nuty).length;
+      komunikat((wyb.length === 1
+        ? `📚 Pod numer <b>${esc(numerGl(gdzie[0]))}</b> wszedł <b>${esc(x.nazwa)}</b> (w pliku ${esc(b.plik)}: ${numerPresetu(x)}) — ${n} ${odm(n, 'nagranie', 'nagrania', 'nagrań')}.`
+        : `📚 Wstawione ${wyb.length} ${odm(wyb.length, 'instrument', 'instrumenty', 'instrumentów')}, każdy pod swój numer: ${gdzie.slice(0, 6).map(i => esc(numerGl(i))).join(', ')}${gdzie.length > 6 ? '…' : ''}.`
+          + (dwa ? '<br>⚠ Kilka miało ten sam numer — został ostatni.' : ''))
+        + (uw.length ? `<br>⚠ ${uw.slice(0, 3).map(esc).join('<br>⚠ ')}${uw.length > 3 ? '…' : ''}` : ''));
     };
   });
 }
@@ -1379,9 +1508,11 @@ async function otworzPlik(plik) {
     komunikat(`⏳ Czytam <b>${esc(plik.name)}</b>…`);
     let w; try { w = await czytajSf2(plik); } catch (e) { komunikat(`✖ <b>${esc(plik.name)}</b>: ${esc(e.message)}.`); return; }
     dodajDoBiblioteki(w);
+    if (w.duzy) { komunikat(`📚 <b>${esc(plik.name)}</b> ma ${(plik.size / 1073741824).toFixed(2).replace('.', ',')} GB — za dużo, żeby otworzyć cały bank naraz. `
+      + `Jego ${w.presety.length} barw czeka w <b>📚 Z SF2…</b>: wybierz numer i weź barwę, którą chcesz.`); return; }
     const mel = w.presety.filter(x => !x.perk && x.bank === 0), per = w.presety.filter(x => x.perk);
     const wybrane = [...mel, ...per.slice(0, 1)], reszta = w.presety.length - wybrane.length;
-    const zb = wybrane.map(x => w.zbuduj(x.k)); w.uwagi = zb.flatMap(x => x.uwagi);
+    const zb = await Promise.all(wybrane.map(x => w.zbuduj(x.k))); w.uwagi = zb.flatMap(x => x.uwagi);
     const { glosy, nadmiar } = rozlozPoNumerach(zb.map(x => x.g));
     BUF.clear(); GOT.clear(); bank = { nazwa: w.nazwa || plik.name.replace(/\.sf2$/i, ''), autor: w.autor, opis: w.opis, glosy };
     akt = Math.max(0, glosy.findIndex(g => Object.keys(g.nuty).length)); wybranyKlawisz = null; zmiany = false;
@@ -1439,8 +1570,9 @@ function klawiszeWzoru(i) { const k = new Set(), x = presetWzoru(i); if (!x) ret
   for (const z of WZOR.surowe.glosy[x.k].probki) for (let n = Math.max(OD, z.lo); n <= Math.min(DO, z.hi); n++) k.add(n); return k; }
 function buforWzoru(sh) {                                      // próbka z pliku (Int16) → bufor dźwięku, raz na próbkę
   const kl = sh.start + ':' + sh.end; if (BUF_WZ.has(kl)) return BUF_WZ.get(kl);
-  const { v, S } = WZOR.surowe, n = Math.max(1, sh.end - sh.start), b = audio.createBuffer(1, n, sh.fr || 44100), d = b.getChannelData(0);
-  for (let j = 0; j < n; j++) d[j] = v.getInt16(S + 2 * (sh.start + j), true) / 32768;
+  const p = WZOR.surowe.daj(sh); if (!p) { WZOR.surowe.doczytaj([sh]).catch(() => {}); return null; }   // duży bank: zagra, gdy nagranie dojdzie
+  const n = Math.max(1, sh.end - sh.start), b = audio.createBuffer(1, n, sh.fr || 44100), d = b.getChannelData(0);
+  for (let j = 0; j < n; j++) d[j] = (p[j] || 0) / 32768;
   BUF_WZ.set(kl, b); return b;
 }
 function edycjaStrefy(z) {                                     // obwiednia z SF2 → ustawienia grania (to samo liczenie co przy 📚 Z SF2…)
@@ -1455,22 +1587,26 @@ function edycjaStrefy(z) {                                     // obwiednia z SF
   if (z.start > 0) E.cisza = z.start / (z.sh.fr || 44100);
   return E;
 }
-function grajWzor(n) {
+async function grajWzor(n) {
+  if (WZOR.duzy) await WZOR.surowe.doczytaj(strefyWzoru(akt, n).map(z => z.sh));
   if (!strefyWzoru(akt, n).length) { komunikat(presetWzoru(akt) ? `🟢 Wzór: klawisz <b>${nazwaNuty(n)}</b> (${n}) w tej barwie milczy.` : `🟢 We wzorze nie ma barwy <b>${esc(numerGl(akt))}</b> — cisza.`); return null; }
   return dzwiekWzoru(akt, n, 100, kompresor);
 }
 function dzwiekWzoru(i, n, sila, wyj, kiedy, bend) {          // jedna nuta barwy nr i ze wzoru → funkcja „puść”
   const strefy = strefyWzoru(i, n, sila); if (!strefy.length) return null;
   const stopy = strefy.map(z => {
-    const sh = z.sh, buf = buforWzoru(sh), sc = z.tc(56) != null ? z.tc(56) : 100;
+    const sh = z.sh, buf = buforWzoru(sh), sc = z.tc(56) != null ? z.tc(56) : 100; if (!buf) return null;
     const szyb = Math.pow(2, ((n - z.root) * sc + z.fine) / 1200);
     const petla = z.tryb === 1 || z.tryb === 3 ? [sh.sl - sh.start, sh.el - sh.start] : null;
     const g = audio.createGain(); g.gain.value = Math.pow(10, -0.4 * Math.max(0, z.tc(48) || 0) / 200);   // tłumienie z pliku (jak w zwykłych odtwarzaczach SF2)
     if (z.tc(17)) { const p = audio.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, z.tc(17) / 500)); g.connect(p); p.connect(wyj); } else g.connect(wyj);
     return zagrajNagranie(buf, { petla, czest: sh.fr, wybrzmienie: z.tryb === 3 && petla ? petla[1] : null }, edycjaStrefy(z), szyb, g, kiedy, bend);
   });
-  return c => stopy.forEach(f => f(c));
+  if (!stopy.some(Boolean)) return null;
+  return c => stopy.forEach(f => f && f(c));
 }
+// duży wzór: nagrania barwy nr i doczytuję z pliku, zanim zagra (mały — są od razu)
+const doczytajWzor = i => { const x = presetWzoru(i); return x && WZOR.duzy ? WZOR.surowe.doczytaj(WZOR.surowe.glosy[x.k].probki.map(z => z.sh)) : Promise.resolve(); };
 function opiszWzor(n) {
   const x = presetWzoru(akt), dl = $('opis'); czyscFale();
   const st = n != null ? strefyWzoru(akt, n) : [];
@@ -1478,7 +1614,7 @@ function opiszWzor(n) {
     <dt>Barwa</dt><dd>${x ? `${numerPresetu(x)} · <b>${esc(x.nazwa)}</b>` : `brak barwy ${esc(numerGl(akt))} — cisza`}</dd>`
     + (n != null ? `<dt>Klawisz</dt><dd>${nazwaNuty(n)} (${n}) · ${st.length ? st.map(z => esc(z.sh.nazwa)).join(', ') : 'milczy'}</dd>` : '')
     + `<dt>Twój głos</dt><dd>${ileW(akt) ? `${esc(nazwaGl(akt))} · ${ileW(akt)} ${odm(ileW(akt), 'nagranie', 'nagrania', 'nagrań')}` : 'pusty'} — usłyszysz go po wyłączeniu wzoru (Spacja)</dd>`;
-  $('petla').disabled = $('petleWsz').disabled = true; $('oryginal').hidden = true;
+  $('petla').disabled = $('petleWsz').disabled = true; $('oryginal').hidden = true; $('zapWav').disabled = $('usunDzw').disabled = true;
   rysujEdycje();
 }
 function komunikatWzoru() { const x = presetWzoru(akt);
@@ -1494,6 +1630,7 @@ function ustawWzor(on) {
   if (on && !WZOR) { $('wzorInput').click(); return; }
   if (on === wzorOn) return;
   [...grajace.keys()].forEach(pusc); wzorOn = on; rysujWzorPara(); rysuj();
+  if (on && WZOR.duzy) { doczytajWzor(akt).catch(() => {}); if (PL.gra) new Set(PL.song.uzyte.map(x => x.i)).forEach(i => doczytajWzor(i).catch(() => {})); }
   if (PL.gra) { ciszaKanalow(); komunikatPiosenki(); return; }   // stare nuty gasną — dalej gra już nowe źródło
   if (on) komunikatWzoru(); else komunikat(`🔴 Wzór wyłączony — grasz <b>swoim</b> głosem: ${esc(numerGl(akt))}${ileW(akt) ? '' : ' (pusty)'}.`);
 }
@@ -1697,6 +1834,7 @@ async function graj_piosenke() {
   startAudio(); kanalyPiosenki();
   const potrzebne = [...new Set(PL.song.uzyte.map(x => x.i))].flatMap(i => Object.values(bank.glosy[i].nuty));
   if (!wzorOn && potrzebne.some(w => !GOT.has(w.plik))) { komunikat('⏳ Przygotowuję nagrania do piosenki…'); await Promise.all(potrzebne.map(w => bufor(w).catch(() => {}))); }
+  if (wzorOn && WZOR.duzy) { komunikat('⏳ Doczytuję ze wzoru barwy piosenki…'); for (const i of new Set(PL.song.uzyte.map(x => x.i))) await doczytajWzor(i).catch(() => {}); }
   if (PL.poz >= PL.song.koniec) PL.poz = 0;
   ustawPozycje(PL.poz); PL.kolejka = []; PL.start0 = audio.currentTime + 0.08 - PL.poz; PL.gra = true;
   clearInterval(PL.timer); PL.timer = setInterval(krok, 20); krok(); rysujPiosenke(); komunikatPiosenki();
