@@ -5,3 +5,4 @@
 # Pierwszy bank na liście jest bankiem domyślnym (gra, gdy nie ma urządzenia MIDI).
 # Linijki zaczynające się od # są pomijane. Żeby dodać bank: połóż plik .sf2 / .sf3 w folderze „banki” i dopisz linijkę.
 banki/GeneralUser-GS.sf2.cz1 + banki/GeneralUser-GS.sf2.cz2 | GeneralUser GS 2.0.3 | S. Christian Collins | https://www.schristiancollins.com/generaluser.php | darmowy, wolno używać w programach — licencja: banki/GeneralUser-GS-LICENSE.txt
+banki/Alicja_piano_0_1.sf2.cz1 + banki/Alicja_piano_0_1.sf2.cz2 | Alicja Piano 0.1 | Piotr Przebiorowski | https://mini-klik.pl | Alicja SF2
