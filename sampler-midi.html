@@ -138,6 +138,14 @@
   #opis dd b{color:#fff}
   .petle{display:flex;gap:8px;position:absolute;left:14px;bottom:12px}
   .petle .guz{height:30px;font-size:12px}
+  .nagrGr{position:relative;display:flex}
+  .nagrGr #nagraj{border-radius:15px 0 0 15px;padding:0 10px 0 12px}
+  .nagrGr #nagrZrodlo{border-radius:0 15px 15px 0;border-left:none;padding:0 8px}
+  #nagraj.nagrywa{background:#7a1414;border-color:#ff5a5a;color:#fff}
+  #nagrMenu{position:absolute;left:0;bottom:36px;z-index:20;min-width:260px;max-width:420px;background:#0e1622;border:1px solid #3d5d8f;border-radius:8px;padding:6px 0;box-shadow:0 6px 20px #000a}
+  #nagrMenu div{padding:6px 14px;font-size:13px;color:#cfe0ff;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #nagrMenu div:hover{background:#1d2a3d;color:#fff}
+  #nagrMenu div.on{color:var(--lampka)}
   #komunikat{font-size:14px;line-height:1.5;color:#e8f0ff;height:62px;overflow:auto}
   #komunikat b{color:var(--zloto)}
   #pomoc{font-size:11px;line-height:1.5;color:#8fa8cf;margin-top:8px}
@@ -254,6 +262,8 @@
         <button class="guz" id="petla" title="Sam znajduje dobre miejsce na pętlę w tym nagraniu i robi płynne przejście">🔁 Zrób pętlę</button>
         <button class="guz" id="petleWsz" title="To samo dla wszystkich nagrań tego głosu (zastępuje ich pętle)">🔁 Pętle w całym głosie</button>
         <button class="guz" id="zapWav" title="Zapisz nagranie tego klawisza jako plik WAV" disabled>💾 Zapisz WAV</button>
+        <span class="nagrGr"><button class="guz" id="nagraj" title="Nagraj dźwięk z mikrofonu na zaznaczony klawisz (kliknij jeszcze raz, żeby zakończyć)" disabled>● Nagraj</button><button class="guz" id="nagrZrodlo" title="Wybierz mikrofon">▾</button>
+          <div id="nagrMenu" hidden></div></span>
         <button class="guz" id="oryginal" title="Przywróć nagranie sprzed zrobienia pętli" hidden>↶ Oryginał</button>
       </div>
     </div>
@@ -566,6 +576,7 @@ function opiszKlawisz() {
   if (wzorOn) { opiszWzor(n); return; }
   $('petla').disabled = !wk; $('petleWsz').disabled = !Object.keys(R().nuty).length; $('oryginal').hidden = !(wk && wk.oryginal);
   $('zapWav').disabled = $('usunDzw').disabled = !wk;
+  if (!NAGR.trwa) $('nagraj').disabled = n == null;
   if (n == null) { dl.innerHTML = '<dt>Klawisz</dt><dd>kliknij klawisz, żeby zobaczyć jego nagranie</dd>'; czyscFale(); rysujEdycje(); return; }
   const w = R().nuty[n], z = w || !R().uzup ? null : sasiad(R(), n);
   if (!w) { czyscFale(); rysujEdycje(); dl.innerHTML = `<dt>Klawisz</dt><dd>${nazwaNuty(n)} (${n})</dd><dt>Nagranie</dt><dd>${z != null ? `brak — gra pożyczone od <b>${nazwaNuty(z)}</b> (${z}), przestrojone o ${n - z > 0 ? '+' : ''}${n - z} ${odm(Math.abs(n - z), 'półton', 'półtony', 'półtonów')}` : 'brak — przeciągnij na niego plik WAV'}</dd>`; return; }
@@ -769,6 +780,86 @@ $('zapWav').onclick = async () => {
     catch (e) { komunikat(`✖ Nie umiem zapisać <b>${esc(w.nazwa)}</b>: ${esc(e.message)}`); return; } }
   const a = document.createElement('a'); a.href = URL.createObjectURL(dane); a.download = nazwa; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   komunikat(`💾 Zapisane: <b>${esc(nazwa)}</b> (klawisz ${nazwaNuty(n)}).`); };
+
+
+/* ---------- NAGRYWANIE Z MIKROFONU na zaznaczony klawisz ----------
+   ● Nagraj → nagrywa z wybranego mikrofonu (▾ = lista mikrofonów, wybór zapamiętany), fala rysuje się na żywo.
+   Drugie kliknięcie kończy: cisza z początku i końca obcięta, głośność wyrównana (szczyt −1 dB),
+   nagranie trafia na klawisz jak upuszczony plik WAV (dalej działa pętla, Zapisz WAV, Usuń dźwięk). Najwyżej 60 s. */
+var NAGR = { trwa: false, strumien: null, wezel: null, zrodlo: null, kawalki: [], dl: 0, klawisz: null, start: 0, zegar: null };
+const NAGR_MAX = 60;
+function mikrofonId() { try { return localStorage.getItem('sampler-mikrofon') || ''; } catch (e) { return ''; } }
+async function listaMikrofonow() {
+  let d = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === 'audioinput');
+  if (d.length && !d.some(x => x.label)) {                       // bez zgody przeglądarka nie podaje nazw — pytam raz
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop());
+    d = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === 'audioinput');
+  }
+  return d;
+}
+$('nagrZrodlo').onclick = async e => {
+  e.stopPropagation(); const m = $('nagrMenu');
+  if (!m.hidden) { m.hidden = true; return; }
+  let d; try { d = await listaMikrofonow(); } catch (er) { komunikat('🎤 Przeglądarka nie dała dostępu do mikrofonu. Kliknij kłódkę obok adresu strony i zezwól na mikrofon.'); return; }
+  if (!d.length) { komunikat('🎤 Nie widzę żadnego mikrofonu. Podłącz mikrofon i kliknij ▾ jeszcze raz.'); return; }
+  const wyb = mikrofonId();
+  m.innerHTML = d.map((x, i) => `<div data-id="${esc(x.deviceId)}" class="${(wyb ? x.deviceId === wyb : i === 0) ? 'on' : ''}">${(wyb ? x.deviceId === wyb : i === 0) ? '✓ ' : ''}🎤 ${esc(x.label || 'Mikrofon ' + (i + 1))}</div>`).join('');
+  m.querySelectorAll('div').forEach(el => el.onclick = ev => { ev.stopPropagation(); try { localStorage.setItem('sampler-mikrofon', el.dataset.id); } catch (er) {}
+    m.hidden = true; komunikat(`🎤 Mikrofon: <b>${esc(el.textContent.replace(/^✓ /, '').replace('🎤 ', ''))}</b>`); });
+  m.hidden = false;
+};
+addEventListener('click', () => { $('nagrMenu').hidden = true; });
+$('nagraj').onclick = () => NAGR.trwa ? koniecNagrania() : startNagrania();
+async function startNagrania() {
+  const n = wybranyKlawisz; if (n == null) return;
+  startAudio(); const id = mikrofonId();
+  try {
+    NAGR.strumien = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: id ? { exact: id } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch (e) {
+    if (id) { try { localStorage.removeItem('sampler-mikrofon'); } catch (er) {} }
+    komunikat('🎤 Nie mogę włączyć mikrofonu' + (e.name === 'NotAllowedError' ? ' — przeglądarka nie dała zgody (kłódka obok adresu → Mikrofon: zezwól).' : ' — wybierz inny w ▾.')); return;
+  }
+  NAGR.trwa = true; NAGR.kawalki = []; NAGR.dl = 0; NAGR.klawisz = n; NAGR.start = audio.currentTime;
+  NAGR.zrodlo = audio.createMediaStreamSource(NAGR.strumien);
+  NAGR.wezel = audio.createScriptProcessor(4096, 1, 1);
+  NAGR.wezel.onaudioprocess = e => { if (!NAGR.trwa) return; const d = new Float32Array(e.inputBuffer.getChannelData(0)); NAGR.kawalki.push(d); NAGR.dl += d.length;
+    if (NAGR.dl >= NAGR_MAX * audio.sampleRate) koniecNagrania(); };
+  const cisza = audio.createGain(); cisza.gain.value = 0;
+  NAGR.zrodlo.connect(NAGR.wezel); NAGR.wezel.connect(cisza).connect(audio.destination);
+  $('nagraj').classList.add('nagrywa'); $('nagrZrodlo').disabled = true;
+  komunikat(`🔴 Nagrywam na klawisz <b>${nazwaNuty(n)}</b>… kliknij <b>■ Stop</b>, żeby zakończyć.`);
+  NAGR.zegar = setInterval(nagrRysuj, 60); nagrRysuj();
+}
+function nagrRysuj() {
+  const sek = NAGR.dl / audio.sampleRate; $('nagraj').textContent = '■ Stop ' + Math.floor(sek / 60) + ':' + String(Math.floor(sek % 60)).padStart(2, '0');
+  const cv = $('fala'), c = cv.getContext('2d'), W = cv.width, H = cv.height; c.clearRect(0, 0, W, H);
+  const okno = Math.max(audio.sampleRate * 4, NAGR.dl), krok = okno / W; let x = 0, i = 0, m = 0, pos = 0;
+  c.fillStyle = '#ff6a5a';
+  for (const k of NAGR.kawalki) for (let j = 0; j < k.length; j += 8, pos += 8) { m = Math.max(m, Math.abs(k[j])); if (pos >= (x + 1) * krok) { const h = Math.min(1, m) * H * .9; c.fillRect(x, H / 2 - h / 2, 1, Math.max(1, h)); x++; m = 0; } }
+  void i;
+}
+function koniecNagrania() {
+  if (!NAGR.trwa) return; NAGR.trwa = false; clearInterval(NAGR.zegar);
+  try { NAGR.zrodlo.disconnect(); NAGR.wezel.disconnect(); } catch (e) {}
+  NAGR.strumien.getTracks().forEach(t => t.stop());
+  $('nagraj').classList.remove('nagrywa'); $('nagraj').textContent = '● Nagraj'; $('nagrZrodlo').disabled = false;
+  const fr = audio.sampleRate, d = new Float32Array(NAGR.dl); let o = 0; for (const k of NAGR.kawalki) { d.set(k, o); o += k.length; } NAGR.kawalki = [];
+  // obcięcie ciszy i wyrównanie głośności
+  let szczyt = 0; for (let i = 0; i < d.length; i++) szczyt = Math.max(szczyt, Math.abs(d[i]));
+  if (szczyt < 0.003) { komunikat('🎤 Nic nie słychać — sprawdź mikrofon (▾) i nagraj jeszcze raz.'); opiszKlawisz(); return; }
+  const prog = Math.max(szczyt * 0.03, 0.002); let a = 0, b = d.length - 1;
+  while (a < d.length && Math.abs(d[a]) < prog) a++; while (b > a && Math.abs(d[b]) < prog) b--;
+  a = Math.max(0, a - Math.round(fr * 0.01)); b = Math.min(d.length - 1, b + Math.round(fr * 0.15));
+  const N = b - a + 1, wzm = 0.89 / szczyt, wej = Math.round(fr * 0.002), wyj = Math.round(fr * 0.01);
+  if (N < fr * 0.05) { komunikat('🎤 Nagranie wyszło za krótkie — spróbuj jeszcze raz.'); opiszKlawisz(); return; }
+  const ab = new ArrayBuffer(44 + N * 2), v = new DataView(ab), nap = (p, t) => [...t].forEach((z, j) => v.setUint8(p + j, z.charCodeAt(0)));
+  nap(0, 'RIFF'); v.setUint32(4, 36 + N * 2, true); nap(8, 'WAVE'); nap(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, fr, true); v.setUint32(28, fr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); nap(36, 'data'); v.setUint32(40, N * 2, true);
+  for (let i = 0; i < N; i++) { let x = d[a + i] * wzm; if (i < wej) x *= i / wej; if (i > N - wyj) x *= (N - i) / wyj;
+    v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(x * 32767))), true); }
+  const n = NAGR.klawisz, plik = new File([ab], 'nagranie-' + nazwaNuty(n).replace(/[\\/:*?"<>|]/g, '') + '.wav', { type: 'audio/wav' });
+  dodajNagrania([plik], n).then(() => { const w = R().nuty[n]; if (w && w.plik === plik) { w.skad = 'nagrany z mikrofonu'; opiszKlawisz(); } });
+}
 
 /* ---------- granie: myszką, klawiaturą komputera i USB (kilka klawiszy naraz) ---------- */
 const grajace = new Map();
